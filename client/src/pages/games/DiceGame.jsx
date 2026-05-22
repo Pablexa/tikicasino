@@ -29,11 +29,13 @@ export default function DiceGame() {
   useEffect(() => {
     if (!socket) return
     const onResult = (r) => {
-      setTiraring(false)
-      setResult(r)
-      setHistory(prev => [r, ...prev].slice(0, 10))
-      if (r.win) toast.success(`Tirared ${r.roll}! Ganaste ${r.payout.toLocaleString()} CALDICOINS!`)
-      else toast.error(`Tirared ${r.roll} — Missed. Try again!`)
+      setTimeout(() => {
+        setTiraring(false)
+        setResult(r)
+        setHistory(prev => [r, ...prev].slice(0, 10))
+        if (r.win) toast.success(`¡Tiraste ${r.roll}! ¡Ganaste! +${r.payout.toLocaleString()} CALDICOINS!`)
+        else toast.error(`¡Tiraste ${r.roll}! Perdiste en esta ronda.`)
+      }, 1000)
     }
     const onError = ({ message }) => { toast.error(message); setTiraring(false) }
     const onSaldoUpdate = ({ balance: b }) => { setBalance(b); updateBalance(b) }

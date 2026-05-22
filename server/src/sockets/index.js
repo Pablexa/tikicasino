@@ -111,6 +111,48 @@ export function setupSocketHandlers(io) {
       }
     });
   });
+
+  // ── PERIODIC INACTIVE / EMPTY ROOM CLEANER ────────────────
+  // Runs every 2 minutes to scan and auto-delete rooms empty for > 5 min or inactive for > 3 hours
+  setInterval(async () => {
+    try {
+      const rooms = await prisma.room.findMany();
+      const now = Date.now();
+      const THREE_HOURS = 3 * 60 * 60 * 1000;
+      const EMPTY_GRACE_PERIOD = 5 * 60 * 1000; // 5 minutes empty grace period
+
+      for (const room of rooms) {
+        const online = roomUsers.get(room.code);
+        const isRoomEmpty = !online || online.size === 0;
+        const timeSinceLastUpdate = now - new Date(room.updatedAt).getTime();
+
+        // 1. If everyone disconnected for > 5 min, OR
+        // 2. If the room has been completely inactive for > 3 hours
+        if ((isRoomEmpty && timeSinceLastUpdate > EMPTY_GRACE_PERIOD) || timeSinceLastUpdate > THREE_HOURS) {
+          console.log(`[Auto-Cleanup] Deleting inactive/empty room: ${room.code}`);
+          
+          // Notify any remaining sockets in the room that it is deleted
+          io.to(`room:${room.code}`).emit('room:deleted');
+
+          // Transactional cleanup
+          await prisma.$transaction([
+            prisma.chatMessage.deleteMany({ where: { roomId: room.id } }),
+            prisma.roomMember.deleteMany({ where: { roomId: room.id } }),
+            prisma.invite.deleteMany({ where: { roomId: room.id } }),
+            prisma.gameRoundPlayer.deleteMany({ where: { gameRound: { roomId: room.id } } }),
+            prisma.gameRound.deleteMany({ where: { roomId: room.id } }),
+            prisma.balanceTransaction.updateMany({ where: { roomId: room.id }, data: { roomId: null } }),
+            prisma.room.delete({ where: { id: room.id } }),
+          ]);
+
+          roomUsers.delete(room.code);
+          crashEngines.delete(room.code);
+        }
+      }
+    } catch (err) {
+      console.error('Error in periodic room cleanup interval:', err);
+    }
+  }, 120000);
 }
 
 export async function emitBalanceUpdate(io, userId) {

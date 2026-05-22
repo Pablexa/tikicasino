@@ -95,6 +95,22 @@ export default function SlotsGame() {
 
   useEffect(() => { setBalance(user?.balance || 0) }, [user?.balance])
 
+  // Reel high-speed spinning animation blur
+  useEffect(() => {
+    if (!spinning) return
+    const interval = setInterval(() => {
+      setGrid(prev => prev.map(() => {
+        const syms = ['cherry', 'lemon', 'bell', 'star', 'diamond', 'seven', 'joker']
+        return [
+          syms[Math.floor(Math.random() * syms.length)],
+          syms[Math.floor(Math.random() * syms.length)],
+          syms[Math.floor(Math.random() * syms.length)]
+        ]
+      }))
+    }, 70)
+    return () => clearInterval(interval)
+  }, [spinning])
+
   useEffect(() => {
     if (!socket) return
 
@@ -107,10 +123,10 @@ export default function SlotsGame() {
           setJackpotAlert(true)
           setTimeout(() => setJackpotAlert(false), 4000)
           toast.success(`¡JACKPOT!! +${result.payout.toLocaleString()} CALDICOINS!`)
-        } else if (result.isGanaste) {
-          toast.success(`Ganastener! +${result.payout.toLocaleString()} CALDICOINS`)
+        } else if (result.isWin) {
+          toast.success(`¡Ganaste! +${result.payout.toLocaleString()} CALDICOINS`)
         } else {
-          toast.error('No win this time. Girar again!')
+          toast.error('No ganaste esta vez. ¡Volvé a girar!')
         }
       }, 1200)
     }
@@ -193,7 +209,7 @@ export default function SlotsGame() {
 
               {/* Ganaste display */}
               <AnimatePresence>
-                {lastResult?.isGanaste && (
+                {lastResult?.isWin && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}

@@ -53,9 +53,11 @@ export function setupCrashSocket(io, socket) {
 
   socket.on('crash:join', async ({ roomCode }) => {
     try {
-      const room = await prisma.room.findUnique({ where: { code: roomCode?.toUpperCase() } });
+      if (!roomCode) return;
+      const room = await prisma.room.findUnique({ where: { code: roomCode.toUpperCase() } });
       if (!room) return;
 
+      socket.join(`room:${roomCode}`); // JOIN room channel to receive live ticks!
       const engine = getOrCreateCrashEngine(io, roomCode, room.id);
       socket.emit('crash:state', engine.getState());
     } catch (err) {

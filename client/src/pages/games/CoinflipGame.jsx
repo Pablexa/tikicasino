@@ -25,11 +25,13 @@ export default function CoinflipGame() {
   useEffect(() => {
     if (!socket) return
     const onResult = (r) => {
-      setFlipping(false)
-      setResult(r)
-      setHistory(prev => [r, ...prev].slice(0, 10))
-      if (r.win) toast.success(`${r.result.toUpperCase()}! Ganaste ${r.payout.toLocaleString()} CALDICOINS!`)
-      else toast.error(`${r.result.toUpperCase()} — Perdiste. Try again!`)
+      setTimeout(() => {
+        setFlipping(false)
+        setResult(r)
+        setHistory(prev => [r, ...prev].slice(0, 10))
+        if (r.win) toast.success(`${r.result.toUpperCase()}! ¡Ganaste! +${r.payout.toLocaleString()} CALDICOINS!`)
+        else toast.error(`${r.result.toUpperCase()} — Perdiste esta ronda.`)
+      }, 1200)
     }
     const onError = ({ message }) => { toast.error(message); setFlipping(false) }
     const onSaldoUpdate = ({ balance: b }) => { setBalance(b); updateBalance(b) }

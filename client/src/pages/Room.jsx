@@ -67,6 +67,11 @@ export default function Room() {
       }
     })
 
+    socket.on('room:deleted', () => {
+      toast.error('Esta sala fue eliminada por inactividad o desconexión.')
+      navigate('/lobby')
+    })
+
     socket.on('room:balanceUpdate', ({ userId, balance }) => {
       setRoom(prev => {
         if (!prev) return prev
@@ -91,6 +96,7 @@ export default function Room() {
       socket.off('room:memberJoined')
       socket.off('room:memberLeft')
       socket.off('room:kicked')
+      socket.off('room:deleted')
       socket.off('room:balanceUpdate')
       socket.off('balance:update')
     }

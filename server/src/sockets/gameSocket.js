@@ -346,7 +346,7 @@ export function setupGameSocket(io, socket) {
       const bet = parseInt(betAmount);
       if (!roomCode || !bet || bet <= 0) { socket.emit('slots:error', { message: 'Apuesta inválida.' }); return; }
       const room = await prisma.room.findUnique({ where: { code: roomCode.toUpperCase() } });
-      if (!room) return;
+      if (!room) { socket.emit('slots:error', { message: 'Sala no encontrada.' }); return; }
       const freshUser = await prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } });
       if (freshUser.balance < bet) { socket.emit('slots:error', { message: 'CALDICOINS insuficientes.' }); return; }
       await deductBet(user.id, bet, 'slots', room.id);
@@ -361,7 +361,7 @@ export function setupGameSocket(io, socket) {
       }
     } catch (err) {
       console.error('slots:spin error:', err);
-      socket.emit('slots:error', { message: 'Error del servidor.' });
+      socket.emit('slots:error', { message: 'Error del servidor al girar Slots.' });
     }
   });
 
@@ -371,7 +371,7 @@ export function setupGameSocket(io, socket) {
       const bet = parseInt(betAmount);
       if (!roomCode || !choice || !bet) { socket.emit('coinflip:error', { message: 'Datos inválidos.' }); return; }
       const room = await prisma.room.findUnique({ where: { code: roomCode.toUpperCase() } });
-      if (!room) return;
+      if (!room) { socket.emit('coinflip:error', { message: 'Sala no encontrada.' }); return; }
       const freshUser = await prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } });
       const gameResult = playCoinflip(choice, bet, freshUser.balance);
       if (!gameResult.success) { socket.emit('coinflip:error', { message: gameResult.error }); return; }
@@ -383,7 +383,10 @@ export function setupGameSocket(io, socket) {
         await broadcastSystemMessage(io, roomCode, room.id,
           `${user.nickname} ganó ${gameResult.payout.toLocaleString()} CALDICOINS en Moneda! (${gameResult.result})`);
       }
-    } catch (err) { console.error('coinflip:play error:', err); }
+    } catch (err) {
+      console.error('coinflip:play error:', err);
+      socket.emit('coinflip:error', { message: 'Error del servidor en Coinflip.' });
+    }
   });
 
   // ── DICE ───────────────────────────────────────────────────
@@ -392,7 +395,7 @@ export function setupGameSocket(io, socket) {
       const bet = parseInt(betAmount);
       if (!roomCode || !target || !direction || !bet) { socket.emit('dice:error', { message: 'Datos inválidos.' }); return; }
       const room = await prisma.room.findUnique({ where: { code: roomCode.toUpperCase() } });
-      if (!room) return;
+      if (!room) { socket.emit('dice:error', { message: 'Sala no encontrada.' }); return; }
       const freshUser = await prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } });
       const gameResult = playDice(target, direction, bet, freshUser.balance);
       if (!gameResult.success) { socket.emit('dice:error', { message: gameResult.error }); return; }
@@ -400,6 +403,9 @@ export function setupGameSocket(io, socket) {
       if (gameResult.payout > 0) await creditPayout(user.id, gameResult.payout, 'dice_win', 'dice', room.id);
       await emitBalanceUpdate(io, user.id);
       socket.emit('dice:result', gameResult);
-    } catch (err) { console.error('dice:play error:', err); }
+    } catch (err) {
+      console.error('dice:play error:', err);
+      socket.emit('dice:error', { message: 'Error del servidor en Dados.' });
+    }
   });
 }
