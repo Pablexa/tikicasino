@@ -10,12 +10,14 @@ import api from '../lib/api.js'
 import toast from 'react-hot-toast'
 
 const GAMES = [
-  { id: 'blackjack', name: 'Blackjack', desc: 'Superá al dealer', color: 'from-violet-900/50 to-purple-950/50', border: 'border-violet-500/20' },
-  { id: 'roulette', name: 'Ruleta', desc: 'Rueda europea', color: 'from-emerald-900/50 to-teal-950/50', border: 'border-emerald-500/20' },
-  { id: 'slots', name: 'Slots', desc: '5 carretes', color: 'from-yellow-900/50 to-orange-950/50', border: 'border-yellow-500/20' },
-  { id: 'crash', name: 'Crash', desc: 'Retirá antes del crash', color: 'from-red-900/50 to-rose-950/50', border: 'border-red-500/20' },
-  { id: 'coinflip', name: 'Moneda', desc: 'Cara o ceca', color: 'from-green-900/50 to-teal-950/50', border: 'border-green-500/20' },
-  { id: 'dice', name: 'Dados', desc: 'Más alto o más bajo', color: 'from-pink-900/50 to-fuchsia-950/50', border: 'border-pink-500/20' },
+  { id: 'blackjack', name: 'Blackjack', desc: 'Superá al dealer', color: 'from-violet-900/50 to-purple-950/50', border: 'border-violet-500/20', emoji: '🃏' },
+  { id: 'roulette', name: 'Ruleta', desc: 'Rueda europea', color: 'from-emerald-900/50 to-teal-950/50', border: 'border-emerald-500/20', emoji: '🎰' },
+  { id: 'slots', name: 'Slots', desc: '5 carretes', color: 'from-yellow-900/50 to-orange-950/50', border: 'border-yellow-500/20', emoji: '🎳' },
+  { id: 'crash', name: 'Crash', desc: 'Retirá antes del crash', color: 'from-red-900/50 to-rose-950/50', border: 'border-red-500/20', emoji: '🚀' },
+  { id: 'coinflip', name: 'Moneda', desc: 'Cara o ceca', color: 'from-green-900/50 to-teal-950/50', border: 'border-green-500/20', emoji: '🪙' },
+  { id: 'dice', name: 'Dados', desc: 'Más alto o más bajo', color: 'from-pink-900/50 to-fuchsia-950/50', border: 'border-pink-500/20', emoji: '🎲' },
+  { id: 'poker', name: 'Video Poker', desc: 'Jacks or Better', color: 'from-indigo-900/50 to-blue-950/50', border: 'border-indigo-500/20', emoji: '♠️' },
+  { id: 'liarsbar', name: "Liar's Bar", desc: '2-15 jugadores', color: 'from-orange-900/50 to-amber-950/50', border: 'border-orange-500/20', emoji: '🎭', multiplayer: true },
 ]
 
 function formatTimeLeft(date) {
@@ -148,13 +150,17 @@ export default function Lobby() {
             <div>
               <h2 className="font-display font-bold text-lg text-tiki-text mb-4">Juegos</h2>
               <p className="text-xs text-tiki-muted mb-4">Creá o unite a una sala primero para empezar a jugar.</p>
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 {GAMES.map((game) => (
                   <motion.div key={game.id} whileHover={{ y: -4 }}
-                    className={`game-card bg-gradient-to-br ${game.color} border ${game.border} p-5`}>
-                    <h3 className="font-display font-bold text-tiki-text">{game.name}</h3>
-                    <p className="text-xs text-tiki-muted mt-1">{game.desc}</p>
-                    <p className="text-xs text-tiki-green mt-3">Disponible en salas</p>
+                    className={`game-card bg-gradient-to-br ${game.color} border ${game.border} p-4`}>
+                    <div className="text-2xl mb-2">{game.emoji}</div>
+                    <h3 className="font-display font-bold text-tiki-text text-sm">{game.name}</h3>
+                    <p className="text-xs text-tiki-muted mt-0.5">{game.desc}</p>
+                    {game.multiplayer
+                      ? <span className="badge-violet text-xs mt-2 inline-block">Multijugador</span>
+                      : <p className="text-xs text-tiki-green mt-2">Disponible en salas</p>
+                    }
                   </motion.div>
                 ))}
               </div>
