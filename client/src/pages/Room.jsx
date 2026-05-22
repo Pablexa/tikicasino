@@ -6,17 +6,17 @@ import { useSocket } from '../hooks/useSocket.jsx'
 import Navbar from '../components/Navbar.jsx'
 import ChatPanel from '../components/ChatPanel.jsx'
 import PlayerCard from '../components/PlayerCard.jsx'
-import { IconCopy, IconConfiguración, IconUsers } from '../components/Icons.jsx'
+import { IconCopy, IconSettings, IconUsers } from '../components/Icons.jsx'
 import api from '../lib/api.js'
 import toast from 'react-hot-toast'
 
 const GAMES = [
-  { id: 'blackjack', name: 'Blackjack', desc: 'Beat the dealer', color: 'from-violet-600/20 to-purple-700/20', border: 'border-violet-500/20' },
-  { id: 'roulette', name: 'Roulette', desc: 'Girar the wheel', color: 'from-emerald-600/20 to-teal-700/20', border: 'border-emerald-500/20' },
-  { id: 'slots', name: 'Slots', desc: '5-reel machine', color: 'from-yellow-600/20 to-orange-700/20', border: 'border-yellow-500/20' },
-  { id: 'crash', name: 'Crash', desc: 'Cash out in time', color: 'from-red-600/20 to-rose-700/20', border: 'border-red-500/20' },
-  { id: 'coinflip', name: 'Coinflip', desc: 'Cara or tails', color: 'from-cyan-600/20 to-sky-700/20', border: 'border-cyan-500/20' },
-  { id: 'dice', name: 'Dice', desc: 'Más alto or lower', color: 'from-pink-600/20 to-fuchsia-700/20', border: 'border-pink-500/20' },
+  { id: 'blackjack', name: 'Blackjack', desc: 'Superá al dealer', color: 'from-violet-600/20 to-purple-700/20', border: 'border-violet-500/20' },
+  { id: 'roulette', name: 'Ruleta', desc: 'Girá la ruleta', color: 'from-emerald-600/20 to-teal-700/20', border: 'border-emerald-500/20' },
+  { id: 'slots', name: 'Slots', desc: 'Máquina de 5 rodillos', color: 'from-yellow-600/20 to-orange-700/20', border: 'border-yellow-500/20' },
+  { id: 'crash', name: 'Crash', desc: 'Retirá a tiempo', color: 'from-red-600/20 to-rose-700/20', border: 'border-red-500/20' },
+  { id: 'coinflip', name: 'Moneda', desc: 'Cara o ceca', color: 'from-cyan-600/20 to-sky-700/20', border: 'border-cyan-500/20' },
+  { id: 'dice', name: 'Dados', desc: 'Más alto o más bajo', color: 'from-pink-600/20 to-fuchsia-700/20', border: 'border-pink-500/20' },
 ]
 
 export default function Room() {
@@ -28,7 +28,7 @@ export default function Room() {
   const [room, setRoom] = useState(null)
   const [onlineUsers, setOnlineUsers] = useState(new Set())
   const [loading, setLoading] = useState(true)
-  const [copied, setCopiado] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     loadRoom()
@@ -60,7 +60,7 @@ export default function Room() {
 
     socket.on('room:kicked', ({ userId }) => {
       if (userId === user?.id) {
-        toast.error('You have been removed from this room.')
+        toast.error('Fuiste removido de esta sala.')
         navigate('/lobby')
       }
     })
@@ -93,22 +93,22 @@ export default function Room() {
 
   const copyCode = () => {
     navigator.clipboard.writeText(roomCode)
-    setCopiado(true)
-    setTimeout(() => setCopiado(false), 2000)
-    toast.success('Room code copied!')
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+    toast.success('¡Código copiado!')
   }
 
   const copyLink = () => {
     navigator.clipboard.writeText(window.location.href)
-    toast.success('Invite link copied!')
+    toast.success('¡Link de invitación copiado!')
   }
 
   const kickMember = async (userId) => {
     try {
       await api.post(`/rooms/${roomCode}/kick`, { userId })
-      toast.success('Player removed')
+      toast.success('Jugador removido')
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Cannot kick player')
+      toast.error(err.response?.data?.error || 'No se puede remover al jugador')
     }
   }
 
@@ -144,19 +144,20 @@ export default function Room() {
                     ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     : <IconCopy size={16} />
                   }
+
                 </button>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="badge-cyan">
                 <IconUsers size={12} />
-                {room.members?.length || 0} players
+                {room.members?.length || 0} jugadores
               </span>
               <button onClick={copyLink} className="btn-ghost text-sm py-2 px-3">
-                Invite Link
+                Invitar
               </button>
               <Link to="/lobby" className="btn-ghost text-sm py-2 px-3">
-                Leave
+                Salir
               </Link>
             </div>
           </div>
@@ -167,7 +168,7 @@ export default function Room() {
           <div className="lg:col-span-3 space-y-6">
             {/* Games */}
             <div>
-              <h2 className="font-display font-bold text-lg text-tiki-text mb-4">Choose a Game</h2>
+              <h2 className="font-display font-bold text-lg text-tiki-text mb-4">Elegí un juego</h2>
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {GAMES.map(game => (
                   <motion.div
@@ -179,8 +180,8 @@ export default function Room() {
                     <h3 className="font-display font-bold text-tiki-text text-lg">{game.name}</h3>
                     <p className="text-xs text-tiki-muted mt-1">{game.desc}</p>
                     <div className="mt-4">
-                      <span className="text-xs font-semibold text-cyan-400 flex items-center gap-1">
-                        Play now
+                      <span className="text-xs font-semibold text-tiki-green flex items-center gap-1">
+                        Jugar
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><polyline points="9 18 15 12 9 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>
                       </span>
                     </div>
