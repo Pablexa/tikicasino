@@ -1,130 +1,128 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../hooks/useAuth.jsx'
 import { useSocket } from '../../hooks/useSocket.jsx'
 import Navbar from '../../components/Navbar.jsx'
-import BetInput from '../../components/BetInput.jsx'
-import BalanceBadge from '../../components/BalanceBadge.jsx'
 import ChatPanel from '../../components/ChatPanel.jsx'
 import toast from 'react-hot-toast'
 
-const SUIT_SYMBOLS = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' }
-const RED_SUITS = ['hearts', 'diamonds']
+const SUITS = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' }
 
-// Poker hand rankings
-const HAND_NAMES = {
-  royal_flush: '🔥 Royal Flush',
-  straight_flush: '✨ Straight Flush',
-  four_of_a_kind: '💥 Póker',
-  full_house: '🏠 Full House',
-  flush: '🌊 Color',
-  straight: '↗️ Escalera',
-  three_of_a_kind: '3️⃣ Trío',
-  two_pair: '2️⃣ Doble Par',
-  pair: '1️⃣ Par',
-  high_card: '🃏 Carta Alta',
-}
-
-const PAYOUTS = {
-  royal_flush: 800, straight_flush: 50, four_of_a_kind: 25,
-  full_house: 9, flush: 6, straight: 4,
-  three_of_a_kind: 3, two_pair: 2, pair: 1, high_card: 0,
-}
-
-function PlayingCard({ card, held, onToggle, small = false, dealing = false }) {
-  if (!card) return (
-    <div className="playing-card" style={{ minWidth: 56, minHeight: 84, opacity: 0.3 }}>
-      <span className="text-tiki-muted">?</span>
+function PlayingCard({ card, hidden, className = '' }) {
+  if (hidden) return (
+    <div className={`playing-card border-2 border-white/20 opacity-50 bg-tiki-border ${className}`} style={{ minWidth: 44, minHeight: 66 }}>
+      <span className="text-white/20">?</span>
     </div>
   )
-  const isRed = RED_SUITS.includes(card.suit)
+  if (!card) return <div className={`w-11 h-[66px] rounded-lg border border-white/10 ${className}`} />
+  const isRed = ['hearts', 'diamonds'].includes(card.suit)
   return (
     <motion.div
-      initial={dealing ? { rotateY: 180, opacity: 0 } : false}
-      animate={{ rotateY: 0, opacity: 1 }}
-      transition={{ duration: 0.4 }}
-      onClick={onToggle}
-      className={`playing-card ${isRed ? 'red' : 'black'} relative cursor-pointer select-none transition-all duration-200 ${held ? 'ring-2 ring-yellow-400 -translate-y-3 shadow-lg shadow-yellow-400/30' : 'hover:-translate-y-1'}`}
-      style={{ minWidth: small ? 44 : 56, minHeight: small ? 66 : 84 }}
+      initial={{ rotateY: 180 }} animate={{ rotateY: 0 }}
+      className={`playing-card ${isRed ? 'red' : 'black'} ${className}`}
+      style={{ minWidth: 44, minHeight: 66, fontSize: 14 }}
     >
-      <span style={{ fontSize: small ? 11 : 14 }}>{card.rank}</span>
-      <span style={{ fontSize: small ? 9 : 12 }}>{SUIT_SYMBOLS[card.suit]}</span>
-      {held && (
-        <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-yellow-400 font-bold text-xs">
-          GUARDAR
-        </div>
-      )}
+      <span>{card.rank}</span>
+      <span style={{ fontSize: 11 }}>{SUITS[card.suit]}</span>
     </motion.div>
   )
 }
 
-export default function PokerGame() {
+function PokerPlayer({ player, isMe, actionIdx }) {
+  if (!player) return <div className="h-24 w-24 rounded-2xl border border-white/5" />
+  const isAction = player.isAction
+  const isDealer = player.isDealer
+  return (
+    <div className={`relative p-3 rounded-2xl flex flex-col items-center transition-all ${isAction ? 'bg-yellow-400/10 border border-yellow-400/30' : 'bg-black/30 border border-white/10'} ${player.folded ? 'opacity-40' : ''}`}>
+      {isDealer && <div className="absolute -top-3 -right-3 w-6 h-6 bg-white text-black rounded-full flex items-center justify-center text-xs font-bold shadow-lg">D</div>}
+      
+      {/* Name and Stack */}
+      <span className="text-xs font-bold text-white mb-1 truncate w-full text-center">
+        {isMe ? '⭐ Vos' : player.nickname}
+      </span>
+      <span className="text-xs font-mono text-yellow-400 mb-2">{player.stack.toLocaleString()} C</span>
+      
+      {/* Cards */}
+      <div className="flex gap-1 mb-2">
+        {player.cardCount === 2 && !player.holeCards && (
+          <><PlayingCard hidden /><PlayingCard hidden /></>
+        )}
+        {player.holeCards && player.holeCards.map((c, i) => <PlayingCard key={i} card={c} />)}
+        {player.cardCount === 0 && <><div className="w-11 h-[66px]"/><div className="w-11 h-[66px]"/></>}
+      </div>
+      
+      {/* Bet / Action */}
+      <div className="h-6 flex items-center justify-center w-full">
+        {player.bet > 0 && <span className="text-xs bg-yellow-400/20 text-yellow-400 px-2 py-0.5 rounded-full font-bold border border-yellow-400/30">{player.bet}</span>}
+        {player.folded && <span className="text-xs text-red-400 font-bold uppercase tracking-wider">Fold</span>}
+        {player.allin && <span className="text-xs text-rose-500 font-bold uppercase tracking-wider">All-in</span>}
+      </div>
+    </div>
+  )
+}
+
+export default function TexasHoldemGame() {
   const { roomCode } = useParams()
-  const { user, updateBalance } = useAuth()
+  const { user } = useAuth()
   const { socket } = useSocket()
 
-  const [phase, setPhase] = useState('betting') // betting | dealt | result
-  const [hand, setHand] = useState([])
-  const [held, setHeld] = useState([false, false, false, false, false])
-  const [result, setResult] = useState(null)
-  const [bet, setBet] = useState(100)
-  const [balance, setBalance] = useState(user?.balance || 0)
-  const [loading, setLoading] = useState(false)
-  const [dealing, setDealing] = useState(false)
-
-  useEffect(() => { setBalance(user?.balance || 0) }, [user?.balance])
+  const [table, setTable] = useState(null)
+  const [inGame, setInGame] = useState(false)
+  const [raiseAmount, setRaiseAmount] = useState(0)
 
   useEffect(() => {
     if (!socket) return
-    const onState = ({ hand: h, phase: p, result: r, balance: b }) => {
-      if (h) setHand(h)
-      if (p) setPhase(p)
-      if (r !== undefined) setResult(r)
-      if (b !== undefined) { setBalance(b); updateBalance(b) }
-      setLoading(false)
-      setDealing(false)
-      if (r && r.handName) {
-        const payout = PAYOUTS[r.handName] || 0
-        if (payout > 0) toast.success(`${HAND_NAMES[r.handName]} — +${r.winAmount?.toLocaleString()} CALDICOINS!`)
-        else toast(`${HAND_NAMES[r.handName]} — Sin pago`, { icon: '🃏' })
-      }
+
+    socket.emit('poker:join', { roomCode })
+
+    const onState = (state) => {
+      setTable(state)
+      setInGame(state.players.some(p => p.id === user?.id))
+      // set min raise
+      if (state.currentBet > 0) setRaiseAmount(state.currentBet * 2)
+      else setRaiseAmount(100)
     }
-    const onError = ({ message }) => { toast.error(message); setLoading(false) }
-    const onBalanceUpdate = ({ balance: b }) => { setBalance(b); updateBalance(b) }
+
+    const onJoined = ({ nickname, count }) => {
+      if (nickname !== user?.nickname) toast(`${nickname} se unió a la mesa (${count}/8)`)
+    }
+
+    const onClosed = () => {
+      toast.error('La mesa se cerró.')
+      setTable(null)
+    }
+
+    const onError = ({ message }) => toast.error(message)
+
     socket.on('poker:state', onState)
+    socket.on('poker:playerJoined', onJoined)
+    socket.on('poker:tableClosed', onClosed)
     socket.on('poker:error', onError)
-    socket.on('balance:update', onBalanceUpdate)
+
     return () => {
+      socket.emit('poker:leave', { roomCode })
       socket.off('poker:state', onState)
+      socket.off('poker:playerJoined', onJoined)
+      socket.off('poker:tableClosed', onClosed)
       socket.off('poker:error', onError)
-      socket.off('balance:update', onBalanceUpdate)
     }
-  }, [socket])
+  }, [socket, roomCode, user?.id])
 
-  const deal = () => {
-    if (bet < 10) { toast.error('Mínimo 10 CALDICOINS'); return }
-    if (bet > balance) { toast.error('CALDICOINS insuficientes'); return }
-    setLoading(true); setDealing(true)
-    setHeld([false, false, false, false, false])
-    setResult(null)
-    socket.emit('poker:deal', { roomCode, amount: bet })
-  }
+  const startGame = () => socket.emit('poker:start', { roomCode })
+  const sendAction = (action, amount = 0) => socket.emit('poker:action', { roomCode, action, amount })
 
-  const draw = () => {
-    setLoading(true); setDealing(true)
-    socket.emit('poker:draw', { roomCode, held })
-  }
+  if (!table) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="spinner" />
+    </div>
+  )
 
-  const toggleHeld = (i) => {
-    if (phase !== 'dealt') return
-    setHeld(prev => { const n = [...prev]; n[i] = !n[i]; return n })
-  }
-
-  const newRound = () => {
-    setPhase('betting'); setHand([]); setResult(null)
-    setHeld([false, false, false, false, false])
-  }
+  const myPlayer = table.players.find(p => p.id === user?.id)
+  const isMyTurn = myPlayer?.isAction && table.phase !== 'showdown' && table.phase !== 'waiting'
+  const canCheck = myPlayer && table.currentBet === myPlayer.bet
+  const minRaise = table.currentBet > 0 ? table.currentBet * 2 : 100
+  const maxRaise = myPlayer ? myPlayer.stack + myPlayer.bet : 0
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -133,94 +131,117 @@ export default function PokerGame() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link to={`/room/${roomCode}`} className="btn-ghost text-sm py-2 px-3">← Sala</Link>
-            <h1 className="font-display font-bold text-2xl gradient-text">Video Poker</h1>
+            <h1 className="font-display font-bold text-2xl gradient-text">♠️ Texas Hold'em</h1>
+            <span className="badge-violet text-xs">Multijugador</span>
           </div>
-          <BalanceBadge balance={balance} />
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
-            {/* Table */}
-            <div className="glass rounded-3xl p-6" style={{ background: 'radial-gradient(ellipse at center, rgba(34,197,94,0.05) 0%, transparent 70%)' }}>
-              {/* Hand display */}
-              <div className="flex justify-center items-end gap-3 mb-6 min-h-32">
-                <AnimatePresence>
-                  {hand.length > 0 ? hand.map((card, i) => (
-                    <PlayingCard key={i} card={card} held={held[i]} onToggle={() => toggleHeld(i)} dealing={dealing} />
-                  )) : (
-                    <p className="text-tiki-muted text-sm self-center">Las cartas aparecen acá</p>
+            
+            {/* Poker Table */}
+            <div className="glass rounded-3xl p-6 min-h-[500px] relative flex flex-col justify-between" style={{ background: 'radial-gradient(ellipse at center, rgba(34,197,94,0.1) 0%, transparent 70%)', border: '1px solid rgba(34,197,94,0.2)' }}>
+              
+              {/* Waiting State */}
+              {table.phase === 'waiting' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black/40 rounded-3xl backdrop-blur-sm">
+                  <h2 className="text-2xl font-bold mb-2">Esperando jugadores...</h2>
+                  <p className="text-tiki-muted mb-6">{table.players.length}/8 en la mesa (2000 CALDICOINS Buy-in)</p>
+                  {table.players.length >= 2 && inGame && (
+                    <button onClick={startGame} className="btn-primary px-8 py-3">Iniciar partida</button>
                   )}
-                </AnimatePresence>
+                  {!inGame && table.players.length < 8 && (
+                    <button onClick={() => socket.emit('poker:join', { roomCode })} className="btn-primary px-8 py-3">Sentarse (2000 C)</button>
+                  )}
+                </div>
+              )}
+
+              {/* Top Players */}
+              <div className="flex justify-center gap-4">
+                {table.players.slice(0, 4).map(p => <PokerPlayer key={p.id} player={p} isMe={p.id === user?.id} />)}
               </div>
 
-              {/* Result */}
-              <AnimatePresence>
-                {result && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-4">
-                    <span className="font-display font-black text-3xl text-yellow-400">
-                      {HAND_NAMES[result.handName] || '🃏 Mano'}
-                    </span>
-                    {result.winAmount > 0 && (
-                      <p className="text-green-400 font-mono font-bold mt-1">+{result.winAmount?.toLocaleString()} CALDICOINS</p>
-                    )}
+              {/* Table Center (Community Cards + Pot) */}
+              <div className="flex flex-col items-center justify-center py-8">
+                <div className="bg-black/40 rounded-full px-6 py-2 mb-6 border border-white/10 flex items-center gap-2">
+                  <span className="text-tiki-muted text-sm uppercase tracking-widest font-semibold">Pozo</span>
+                  <span className="text-yellow-400 font-mono font-bold text-xl">{table.pot.toLocaleString()}</span>
+                </div>
+                
+                <div className="flex gap-2 min-h-[66px]">
+                  <AnimatePresence>
+                    {table.community.map((c, i) => <PlayingCard key={i} card={c} />)}
+                  </AnimatePresence>
+                  {/* Placeholders */}
+                  {Array.from({ length: 5 - table.community.length }).map((_, i) => (
+                    <div key={`ph-${i}`} className="w-11 h-[66px] rounded-lg border border-white/5 bg-white/5" />
+                  ))}
+                </div>
+
+                {/* Showdown Winners */}
+                {table.phase === 'showdown' && table.winners && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-6 text-center bg-black/60 px-6 py-3 rounded-2xl border border-yellow-400/30">
+                    {table.winners.map(w => (
+                      <div key={w.playerId} className="mb-1 last:mb-0">
+                        <span className="font-bold text-yellow-400 text-lg">{w.nickname} gana {w.amount} C</span>
+                        <p className="text-sm text-tiki-muted">{w.handName}</p>
+                      </div>
+                    ))}
                   </motion.div>
                 )}
-              </AnimatePresence>
 
-              {/* Phase hint */}
-              {phase === 'dealt' && !result && (
-                <p className="text-center text-tiki-muted text-sm">
-                  Tocá las cartas que querés <span className="text-yellow-400 font-semibold">GUARDAR</span>, luego pedí nuevas
-                </p>
-              )}
+                {/* Action Log */}
+                {table.lastAction && table.phase !== 'showdown' && (
+                  <div className="mt-4 text-sm text-tiki-muted bg-black/30 px-4 py-1 rounded-full">
+                    <span className="font-semibold text-white">{table.lastAction.nickname}</span>{' '}
+                    {table.lastAction.action === 'fold' && 'se retiró'}
+                    {table.lastAction.action === 'check' && 'pasó'}
+                    {table.lastAction.action === 'call' && `igualó ${table.lastAction.amount}`}
+                    {table.lastAction.action === 'raise' && `subió a ${table.lastAction.amount}`}
+                    {table.lastAction.action === 'allin' && `hizo ALL-IN con ${table.lastAction.amount}`}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Players */}
+              <div className="flex justify-center gap-4">
+                {table.players.slice(4, 8).map(p => <PokerPlayer key={p.id} player={p} isMe={p.id === user?.id} />)}
+              </div>
             </div>
 
             {/* Controls */}
-            <div className="glass rounded-2xl p-5 space-y-4">
-              {phase === 'betting' && (
-                <>
-                  <BetInput value={bet} onChange={setBet} min={10} max={Math.min(10000, balance)} balance={balance} />
-                  <button onClick={deal} disabled={loading || bet < 10 || bet > balance} className="btn-primary w-full justify-center py-3.5 text-base">
-                    {loading ? <span className="spinner scale-75" /> : `Repartir — ${bet.toLocaleString()} CALDICOINS`}
-                  </button>
-                </>
-              )}
-              {phase === 'dealt' && (
-                <button onClick={draw} disabled={loading} className="btn-primary w-full justify-center py-3.5 text-base">
-                  {loading ? <span className="spinner scale-75" /> : 'Pedir nuevas cartas'}
-                </button>
-              )}
-              {phase === 'result' && (
-                <button onClick={newRound} className="btn-primary w-full justify-center py-3.5 text-base">
-                  Nueva mano
-                </button>
-              )}
-              {bet > 0 && phase !== 'betting' && (
-                <p className="text-center text-xs text-tiki-muted">
-                  Apuesta: <span className="text-yellow-400 font-mono font-bold">{bet.toLocaleString()} CALDICOINS</span>
-                </p>
-              )}
-            </div>
-
-            {/* Payout table */}
-            <div className="glass rounded-2xl p-4">
-              <p className="font-semibold text-sm text-tiki-text mb-3">Tabla de pagos (× apuesta)</p>
-              <div className="grid grid-cols-2 gap-1 text-xs">
-                {Object.entries(PAYOUTS).filter(([, v]) => v > 0).map(([k, v]) => (
-                  <div key={k} className={`flex justify-between px-3 py-1.5 rounded-lg ${result?.handName === k ? 'bg-yellow-400/20 text-yellow-400' : 'text-tiki-muted'}`}>
-                    <span>{HAND_NAMES[k]}</span>
-                    <span className="font-mono font-bold">{v}×</span>
+            {inGame && table.phase !== 'waiting' && table.phase !== 'showdown' && (
+              <div className={`glass rounded-2xl p-5 ${isMyTurn ? 'ring-2 ring-tiki-green' : 'opacity-50 pointer-events-none'}`}>
+                {isMyTurn && <p className="text-tiki-green font-semibold text-sm mb-3">¡Es tu turno!</p>}
+                
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={() => sendAction('fold')} className="btn-danger flex-1 py-3">Fold</button>
+                  
+                  {canCheck ? (
+                    <button onClick={() => sendAction('check')} className="btn-ghost flex-1 py-3 bg-white/10">Pasar</button>
+                  ) : (
+                    <button onClick={() => sendAction('call')} className="btn-ghost flex-1 py-3 bg-white/10">
+                      Igualar {table.currentBet - myPlayer.bet}
+                    </button>
+                  )}
+                  
+                  {/* Raise Controls */}
+                  <div className="flex-1 min-w-[200px] flex gap-2">
+                    <input type="number" value={raiseAmount} onChange={e => setRaiseAmount(Number(e.target.value))}
+                      className="input w-24 text-center p-0" min={minRaise} max={maxRaise} />
+                    <button onClick={() => sendAction('raise', raiseAmount)} className="btn-primary flex-1 py-3">Subir</button>
                   </div>
-                ))}
+
+                  <button onClick={() => sendAction('allin')} className="btn-danger flex-1 py-3 bg-rose-600 border-none text-white">ALL-IN</button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="h-[600px]">
             <ChatPanel roomCode={roomCode} />
           </div>
         </div>
-        <p className="text-center text-xs text-tiki-muted mt-6">CALDICOINS son puntos ficticios. Sin dinero real.</p>
       </main>
     </div>
   )
