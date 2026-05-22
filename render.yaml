@@ -8,7 +8,7 @@ services:
     buildCommand: "cd client && npm install && npm run build && cd ../server && npm install && npx prisma generate"
     startCommand: "cd server && npm start"
     disk:
-      name: tikicasino-db
+      name: tikicasino-data
       mountPath: /data
       sizeGB: 1
     envVars:
@@ -17,6 +17,6 @@ services:
       - key: DATABASE_URL
         value: "file:/data/tikicasino.db"
       - key: JWT_SECRET
-        generateValue: true
+        value: "tiki-casino-caldicoins-secret-2025-xk9p2qm7"
       - key: COOKIE_SECRET
-        generateValue: true
+        value: "tiki-cookie-caldis-queque-mango-toilet-2025"

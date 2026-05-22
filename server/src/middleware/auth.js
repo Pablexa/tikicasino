@@ -71,7 +71,7 @@ export function requireNotBanned(req, res, next) {
  */
 export function generateToken(userId) {
   return jwt.sign({ userId }, JWT_SECRET, {
-    expiresIn: '7d',
+    expiresIn: '90d',
   });
 }
 
@@ -82,8 +82,8 @@ export function setAuthCookie(res, token) {
   res.cookie('tikicasino_token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 90 * 24 * 60 * 60 * 1000, // 90 days
     path: '/',
   });
 }
