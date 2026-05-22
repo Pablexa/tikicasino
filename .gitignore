@@ -14,10 +14,11 @@ server/prisma/prod.db
 *.db
 *.db-journal
 
-# Environment variables
-.env
+# Environment variables (allow server/.env since it has no secrets - just a SQLite path)
 .env.local
 .env.production
+# Root .env only
+/.env
 
 # Logs
 *.log
