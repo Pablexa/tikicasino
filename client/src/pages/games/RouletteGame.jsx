@@ -38,59 +38,117 @@ export default function RouletteGame() {
   const [spinning, setGirarning] = useState(false)
   const [result, setResult] = useState(null)
   const [history, setHistory] = useState([])
+  const [timer, setTimer] = useState(20)
+  const [status, setStatus] = useState('betting')
+  const [isBetConfirmed, setIsBetConfirmed] = useState(false)
+  const [roomBetsFeed, setRoomBetsFeed] = useState([])
 
   useEffect(() => { setBalance(user?.balance || 0) }, [user?.balance])
 
   useEffect(() => {
     if (!socket) return
 
-    const onResult = ({ winningNumber, totalPremio, netProfit, totalBet }) => {
-      setGirarning(false)
-      setResult(winningNumber)
-      setHistory(prev => [winningNumber, ...prev].slice(0, 15))
-      setActiveBets([])
-      if (netProfit > 0) {
-        toast.success(`${winningNumber} — Ganaste ${netProfit.toLocaleString()} CALDICOINS!`)
+    socket.emit('roulette:join', { roomCode })
+
+    const onState = ({ timer: t, status: s, history: h }) => {
+      setTimer(t)
+      setStatus(s)
+      setHistory(h)
+      if (s === 'spinning') setGirarning(true)
+    }
+
+    const onTick = ({ timer: t, status: s }) => {
+      setTimer(t)
+      setStatus(s)
+      if (s === 'spinning') {
+        setGirarning(true)
+        setResult(null)
       } else {
-        toast.error(`${winningNumber} — Better luck next spin.`)
+        setGirarning(false)
       }
     }
+
+    const onRoundStart = ({ timer: t, status: s }) => {
+      setTimer(t)
+      setStatus(s)
+      setGirarning(false)
+      setResult(null)
+      setActiveBets([])
+      setIsBetConfirmed(false)
+    }
+
+    const onPlayerBet = ({ nickname, amount }) => {
+      setRoomBetsFeed(prev => [{ nickname, amount, id: Math.random() }, ...prev].slice(0, 10))
+    }
+
+    const onSpinResult = ({ winningNumber, history: h }) => {
+      setGirarning(true)
+      // Delay the result to match a 2-second spinning animation
+      setTimeout(() => {
+        setGirarning(false)
+        setResult(winningNumber)
+        setHistory(h)
+      }, 2000)
+    }
+
+    const onResult = ({ winningNumber, netProfit }) => {
+      setTimeout(() => {
+        if (netProfit > 0) {
+          toast.success(`¡Ganaste ${netProfit.toLocaleString()} CALDICOINS en Ruleta! 🎉`)
+        } else {
+          toast.error(`Perdiste en esta ronda de Ruleta. 😔`)
+        }
+      }, 2200)
+    }
+
     const onError = ({ message }) => { toast.error(message); setGirarning(false) }
     const onSaldoUpdate = ({ balance: b }) => { setBalance(b); updateBalance(b) }
 
+    socket.on('roulette:state', onState)
+    socket.on('roulette:tick', onTick)
+    socket.on('roulette:roundStart', onRoundStart)
+    socket.on('roulette:playerBet', onPlayerBet)
+    socket.on('roulette:spinResult', onSpinResult)
     socket.on('roulette:result', onResult)
     socket.on('roulette:error', onError)
     socket.on('balance:update', onSaldoUpdate)
 
     return () => {
+      socket.off('roulette:state', onState)
+      socket.off('roulette:tick', onTick)
+      socket.off('roulette:roundStart', onRoundStart)
+      socket.off('roulette:playerBet', onPlayerBet)
+      socket.off('roulette:spinResult', onSpinResult)
       socket.off('roulette:result', onResult)
       socket.off('roulette:error', onError)
       socket.off('balance:update', onSaldoUpdate)
     }
-  }, [socket])
+  }, [socket, roomCode])
 
   const addBet = () => {
-    if (!betType) { toast.error('Select a bet type'); return }
+    if (isBetConfirmed) { toast.error('Apuestas ya confirmadas para esta ronda'); return }
+    if (status !== 'betting') { toast.error('Mesa cerrada, esperá a la próxima ronda'); return }
+    if (!betType) { toast.error('Seleccioná un tipo de apuesta'); return }
     if (betAmount < 10) { toast.error('Apuesta mínima 10 CALDICOINS'); return }
     const totalBet = activeBets.reduce((s, b) => s + b.amount, 0) + betAmount
     if (totalBet > balance) { toast.error('CALDICOINS insuficientes'); return }
 
     setActiveBets(prev => [...prev, { type: betType, value: betValue, amount: betAmount }])
-    toast.success(`Apuesta colocada: ${betType}${betValue !== null ? ` (${betValue})` : ''} — ${betAmount} CALDICOINS`)
+    toast.success(`Apuesta agregada: ${betType}${betValue !== null ? ` (${betValue})` : ''} — ${betAmount} CALDICOINS`)
   }
 
-  const spin = () => {
-    if (activeBets.length === 0) { toast.error('Primero hacé una apuesta'); return }
+  const confirmBets = () => {
+    if (activeBets.length === 0) { toast.error('Primero colocá tus apuestas'); return }
     if (!socket) return
-    setGirarning(true)
-    setResult(null)
     socket.emit('roulette:bet', { roomCode, bets: activeBets })
-    setTimeout(() => {
-      socket.emit('roulette:spin', { roomCode })
-    }, 100)
+    setIsBetConfirmed(true)
+    toast.success('¡Apuestas confirmadas y enviadas!')
   }
 
-  const clearBets = () => setActiveBets([])
+  const clearBets = () => {
+    if (isBetConfirmed) { toast.error('No podés limpiar apuestas ya enviadas'); return }
+    setActiveBets([])
+  }
 
   const colorClass = { red: 'bg-red-600', black: 'bg-gray-800', green: 'bg-emerald-600' }
 
@@ -102,23 +160,33 @@ export default function RouletteGame() {
           <div className="flex items-center gap-3">
             <Link to={`/room/${roomCode}`} className="btn-ghost text-sm py-2 px-3">← Room</Link>
             <h1 className="font-display font-bold text-2xl gradient-text">European Roulette</h1>
+            <span className="badge-violet text-xs">Multijugador</span>
           </div>
           <BalanceBadge balance={balance} />
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            {/* Wheel display */}
-            <div className="glass rounded-3xl p-6 text-center" style={{ background: 'radial-gradient(ellipse at center, rgba(16,185,129,0.08) 0%, transparent 70%)' }}>
+        <div className="grid lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3 space-y-6">
+            {/* Wheel display & Live Countdown */}
+            <div className="glass rounded-3xl p-6 text-center relative" style={{ background: 'radial-gradient(ellipse at center, rgba(16,185,129,0.08) 0%, transparent 70%)' }}>
+              
+              {/* Synced Timer */}
+              <div className="absolute top-4 right-4 bg-black/40 border border-white/10 rounded-full px-4 py-1.5 flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${status === 'betting' ? 'bg-green-400 animate-ping' : 'bg-red-500 animate-pulse'}`} />
+                <span className="text-xs font-semibold text-white uppercase tracking-wider">
+                  {status === 'betting' ? `Apostando: ${timer}s` : 'Girando...'}
+                </span>
+              </div>
+
               <AnimatePresence mode="wait">
                 {spinning ? (
                   <motion.div key="spin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-12">
                     <motion.div
                       animate={{ rotate: 360 }}
-                      transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                      transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
                       className="w-32 h-32 mx-auto rounded-full border-4 border-emerald-500 border-t-transparent"
                     />
-                    <p className="mt-4 text-tiki-muted animate-pulse">Girarning…</p>
+                    <p className="mt-4 text-tiki-muted animate-pulse">Girando la Ruleta...</p>
                   </motion.div>
                 ) : result !== null ? (
                   <motion.div key="result" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="py-8">
@@ -126,7 +194,7 @@ export default function RouletteGame() {
                       {result}
                     </div>
                     <p className="mt-4 text-lg font-semibold" style={{ color: getColor(result) === 'red' ? '#f87171' : getColor(result) === 'green' ? '#34d399' : '#94a3b8' }}>
-                      {getColor(result).charAt(0).toUpperCase() + getColor(result).slice(1)}
+                      {getColor(result).toUpperCase()}
                       {result !== 0 && ` • ${result % 2 === 0 ? 'Even' : 'Odd'}`}
                       {result !== 0 && ` • ${result <= 18 ? '1-18' : '19-36'}`}
                     </p>
@@ -136,7 +204,7 @@ export default function RouletteGame() {
                     <div className="w-32 h-32 rounded-full mx-auto border-4 border-emerald-500/30 flex items-center justify-center">
                       <span className="text-tiki-muted text-4xl font-display font-black">?</span>
                     </div>
-                    <p className="mt-4 text-tiki-muted text-sm">Colocá tus apuestas, then spin!</p>
+                    <p className="mt-4 text-tiki-muted text-sm">Colocá tus apuestas en el tablero</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -154,8 +222,10 @@ export default function RouletteGame() {
             </div>
 
             {/* Bet types */}
-            <div className="glass rounded-2xl p-5 space-y-4">
-              <h3 className="font-semibold text-tiki-text">Apostars</h3>
+            <div className={`glass rounded-2xl p-5 space-y-4 ${status !== 'betting' || isBetConfirmed ? 'opacity-40 pointer-events-none' : ''}`}>
+              <h3 className="font-semibold text-tiki-text flex items-center gap-2">
+                🎰 Colocá tus Apuestas {isBetConfirmed && <span className="text-xs text-green-400 font-bold">(Apuestas Confirmadas)</span>}
+              </h3>
 
               {/* Outside bets */}
               <div className="grid grid-cols-3 gap-2">
@@ -173,7 +243,7 @@ export default function RouletteGame() {
 
               {/* Number grid */}
               <div>
-                <p className="text-xs text-tiki-muted mb-2">Straight (35×) — click a number:</p>
+                <p className="text-xs text-tiki-muted mb-2">Pleno (35×) — Tocá un número:</p>
                 <div className="grid grid-cols-7 gap-1">
                   {Array.from({ length: 37 }, (_, n) => (
                     <button
@@ -192,14 +262,14 @@ export default function RouletteGame() {
                 <input
                   type="number"
                   className="input w-36 font-mono text-sm"
-                  placeholder="Amount"
+                  placeholder="Monto"
                   value={betAmount}
                   onChange={e => setBetAmount(parseInt(e.target.value) || 0)}
                   min={10}
                 />
                 <span className="text-xs text-yellow-500">CALDICOINS</span>
-                <button onClick={addBet} disabled={!betType || betAmount < 10} className="btn-green text-sm py-2.5 px-4">
-                  + Add Bet
+                <button onClick={addBet} disabled={!betType || betAmount < 10 || isBetConfirmed} className="btn-green text-sm py-2.5 px-4">
+                  + Agregar Apuesta
                 </button>
               </div>
 
@@ -213,19 +283,39 @@ export default function RouletteGame() {
                     </div>
                   ))}
                   <div className="flex gap-2 pt-2">
-                    <button onClick={spin} disabled={spinning} className="btn-primary flex-1 py-3 justify-center text-base">
-                      {spinning ? <span className="spinner scale-75" /> : 'Girar!'}
+                    <button onClick={confirmBets} disabled={isBetConfirmed} className="btn-primary flex-1 py-3 justify-center text-base">
+                      {isBetConfirmed ? '✓ Apuestas Enviadas' : 'Confirmar Apuestas'}
                     </button>
-                    <button onClick={clearBets} disabled={spinning} className="btn-ghost px-4 py-3">Clear</button>
+                    <button onClick={clearBets} disabled={isBetConfirmed} className="btn-ghost px-4 py-3">Limpiar</button>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Chat */}
-          <div className="h-[600px]">
-            <ChatPanel roomCode={roomCode} />
+          {/* Right sidebar: Chat + Live Room Bets Feed */}
+          <div className="flex flex-col gap-6 h-[600px]">
+            {/* Live Bets Feed */}
+            {roomBetsFeed.length > 0 && (
+              <div className="glass rounded-2xl p-4 flex-shrink-0">
+                <h3 className="font-semibold text-xs text-cyan-400 uppercase tracking-widest mb-3">
+                  🔥 Apuestas en la Sala
+                </h3>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                  {roomBetsFeed.map(feed => (
+                    <div key={feed.id} className="flex justify-between items-center text-xs bg-white/5 px-3 py-1.5 rounded-lg">
+                      <span className="text-white font-medium truncate max-w-[100px]">{feed.nickname}</span>
+                      <span className="text-yellow-400 font-mono font-bold">{feed.amount.toLocaleString()} C</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Chat */}
+            <div className="flex-1 min-h-0">
+              <ChatPanel roomCode={roomCode} />
+            </div>
           </div>
         </div>
       </main>

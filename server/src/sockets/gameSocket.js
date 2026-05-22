@@ -191,52 +191,153 @@ export function setupGameSocket(io, socket) {
     broadcastBlackjackHand(roomCode, result.state);
   });
 
-  // ── ROULETTE ──────────────────────────────────────────────
+  // ── ROULETTE (SYNCHRONIZED ROOM-WIDE MULTIPLAYER) ──────────
+  const startRouletteLoop = (roomCode, roomId) => {
+    if (roomGameStates.has(`roulette:${roomCode}`)) return;
+
+    const rouletteState = {
+      timer: 20, // 20s betting phase
+      status: 'betting', // 'betting' or 'spinning'
+      bets: new Map(), // userId -> bets array
+      history: []
+    };
+
+    roomGameStates.set(`roulette:${roomCode}`, rouletteState);
+
+    const intervalId = setInterval(async () => {
+      const state = roomGameStates.get(`roulette:${roomCode}`);
+      if (!state) { clearInterval(intervalId); return; }
+
+      state.timer--;
+
+      // Broadcast timer tick
+      io.to(`roulette:${roomCode}`).emit('roulette:tick', {
+        timer: state.timer,
+        status: state.status
+      });
+
+      if (state.timer <= 0) {
+        if (state.status === 'betting') {
+          // Switch to spinning!
+          state.status = 'spinning';
+          state.timer = 6; // 6s spin animation + result view
+
+          const winningNumber = spinRoulette();
+
+          // Process all active room bets
+          for (const [userId, userBets] of state.bets.entries()) {
+            try {
+              const totalBet = userBets.reduce((sum, b) => sum + b.amount, 0);
+              const freshUser = await prisma.user.findUnique({ where: { id: userId }, select: { balance: true } });
+              
+              if (!freshUser || freshUser.balance < totalBet) continue; // Not enough balance, skip
+
+              await deductBet(userId, totalBet, 'roulette', roomId);
+              const results = processRouletteBets(userBets, winningNumber);
+              const totalPayout = results.reduce((sum, r) => sum + r.payout, 0);
+
+              if (totalPayout > 0) {
+                await creditPayout(userId, totalPayout, 'roulette_win', 'roulette', roomId);
+              }
+
+              await emitBalanceUpdate(io, userId);
+
+              const netProfit = totalPayout - totalBet;
+
+              // Send private detailed results to user's socket
+              const socketId = userSockets.get(userId);
+              if (socketId) {
+                io.to(socketId).emit('roulette:result', {
+                  winningNumber,
+                  results,
+                  totalBet,
+                  totalPayout,
+                  netProfit
+                });
+              }
+
+              if (netProfit > 1000) {
+                const bettorName = userBets[0]?.nickname || 'Un jugador';
+                await broadcastSystemMessage(io, roomCode, roomId,
+                  `${bettorName} ganó ${netProfit.toLocaleString()} CALDICOINS en Ruleta! (${winningNumber})`);
+              }
+            } catch (err) {
+              console.error('Error processing multi-user roulette bet:', err);
+            }
+          }
+
+          // Clear bets for this round
+          state.bets.clear();
+          state.history.unshift(winningNumber);
+          if (state.history.length > 15) state.history.pop();
+
+          // Broadcast spin result to everyone in the room
+          io.to(`roulette:${roomCode}`).emit('roulette:spinResult', {
+            winningNumber,
+            history: state.history
+          });
+
+        } else {
+          // Back to betting!
+          state.status = 'betting';
+          state.timer = 20;
+          io.to(`roulette:${roomCode}`).emit('roulette:roundStart', {
+            timer: state.timer,
+            status: state.status
+          });
+        }
+      }
+    }, 1000);
+
+    rouletteState.intervalId = intervalId;
+  };
+
+  socket.on('roulette:join', async ({ roomCode }) => {
+    try {
+      if (!roomCode) return;
+      const room = await prisma.room.findUnique({ where: { code: roomCode.toUpperCase() } });
+      if (!room) return;
+
+      socket.join(`roulette:${roomCode}`);
+      startRouletteLoop(roomCode, room.id);
+
+      const state = roomGameStates.get(`roulette:${roomCode}`);
+      socket.emit('roulette:state', {
+        timer: state.timer,
+        status: state.status,
+        history: state.history
+      });
+    } catch (err) {
+      console.error('roulette:join error:', err);
+    }
+  });
+
   socket.on('roulette:bet', async ({ roomCode, bets }) => {
     try {
       if (!roomCode || !Array.isArray(bets) || bets.length === 0) return;
-      const room = await prisma.room.findUnique({ where: { code: roomCode.toUpperCase() } });
-      if (!room) return;
+      const state = roomGameStates.get(`roulette:${roomCode}`);
+      if (!state) { socket.emit('roulette:error', { message: 'Mesa de ruleta no activa.' }); return; }
+      if (state.status !== 'betting') { socket.emit('roulette:error', { message: 'La ruleta ya está girando. Esperá a la próxima ronda.' }); return; }
+
       const freshUser = await prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } });
       const totalBet = bets.reduce((sum, b) => sum + (parseInt(b.amount) || 0), 0);
+      
       if (totalBet <= 0 || totalBet > freshUser.balance) {
         socket.emit('roulette:error', { message: 'Apuesta inválida.' }); return;
       }
-      if (!rouletteBets.has(roomCode)) rouletteBets.set(roomCode, new Map());
-      rouletteBets.get(roomCode).set(user.id, bets.map(b => ({ ...b, amount: parseInt(b.amount), userId: user.id })));
-      socket.emit('roulette:betsPlaced', { totalBet });
-    } catch (err) { console.error('roulette:bet error:', err); }
-  });
 
-  socket.on('roulette:spin', async ({ roomCode }) => {
-    try {
-      const room = await prisma.room.findUnique({ where: { code: roomCode?.toUpperCase() } });
-      if (!room) return;
-      const roomBets = rouletteBets.get(roomCode);
-      if (!roomBets || !roomBets.has(user.id)) {
-        socket.emit('roulette:error', { message: 'Primero colocá tus apuestas.' }); return;
-      }
-      const userBets = roomBets.get(user.id);
-      const totalBet = userBets.reduce((sum, b) => sum + b.amount, 0);
-      const freshUser = await prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } });
-      if (!freshUser || freshUser.balance < totalBet) {
-        socket.emit('roulette:error', { message: 'CALDICOINS insuficientes.' }); return;
-      }
-      await deductBet(user.id, totalBet, 'roulette', room.id);
-      const winningNumber = spinRoulette();
-      const results = processRouletteBets(userBets, winningNumber);
-      const totalPayout = results.reduce((sum, r) => sum + r.payout, 0);
-      if (totalPayout > 0) await creditPayout(user.id, totalPayout, 'roulette_win', 'roulette', room.id);
-      roomBets.delete(user.id);
-      await emitBalanceUpdate(io, user.id);
-      const netProfit = totalPayout - totalBet;
-      socket.emit('roulette:result', { winningNumber, results, totalBet, totalPayout, netProfit });
-      io.to(`room:${roomCode}`).emit('roulette:spin', { winningNumber });
-      if (netProfit > 0) {
-        await broadcastSystemMessage(io, roomCode, room.id,
-          `${user.nickname} ganó ${netProfit.toLocaleString()} CALDICOINS en Ruleta! (${winningNumber})`);
-      }
-    } catch (err) { console.error('roulette:spin error:', err); }
+      state.bets.set(user.id, bets.map(b => ({
+        ...b,
+        amount: parseInt(b.amount),
+        userId: user.id,
+        nickname: user.nickname
+      })));
+
+      socket.emit('roulette:betsPlaced', { totalBet });
+      io.to(`roulette:${roomCode}`).emit('roulette:playerBet', { nickname: user.nickname, amount: totalBet });
+    } catch (err) {
+      console.error('roulette:bet error:', err);
+    }
   });
 
   // ── SLOTS ──────────────────────────────────────────────────
