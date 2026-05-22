@@ -69,13 +69,18 @@ app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/stats', statsRouter);
 
 if (process.env.NODE_ENV === 'production') {
-  // Render build copies client/dist to server/public
-  const clientDistPath = path.join(__dirname, '../public');
+  // Serve client/dist directly — built before server starts
+  // __dirname = server/src/, so ../../client/dist = project root client/dist
+  const clientDistPath = path.join(__dirname, '../../client/dist');
   app.use(express.static(clientDistPath));
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
-      res.sendFile(path.join(clientDistPath, 'index.html'));
-    }
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
+    const indexPath = path.join(clientDistPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        res.status(200).json({ status: 'TikiCasino API running', docs: '/api' });
+      }
+    });
   });
 }
 

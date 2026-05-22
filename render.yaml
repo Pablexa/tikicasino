@@ -5,13 +5,11 @@ services:
     region: oregon
     plan: free
     rootDir: .
-    buildCommand: "cd client && npm install && npm run build && cd ../server && npm install && npx prisma generate && mkdir -p public && cp -r ../client/dist/. public/"
-    startCommand: "cd server && node src/index.js"
+    buildCommand: "cd client && npm install && npm run build && cd ../server && npm install && npx prisma generate"
+    startCommand: "cd server && npm start"
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
-        value: "file:./prisma/prod.db"
       - key: JWT_SECRET
         generateValue: true
       - key: COOKIE_SECRET
