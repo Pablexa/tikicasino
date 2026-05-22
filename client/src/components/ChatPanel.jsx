@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useSocket } from '../hooks/useSocket.jsx'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { AvatarSvg } from './AvatarSvg.jsx'
-import { IconEnviar } from './Icons.jsx'
+import { IconSend } from './Icons.jsx'
 
 export default function ChatPanel({ roomCode, roomId }) {
   const { socket } = useSocket()
@@ -116,7 +116,7 @@ export default function ChatPanel({ roomCode, roomId }) {
             disabled={!input.trim()}
             className="btn-primary p-2.5 rounded-xl flex-shrink-0"
           >
-            <IconEnviar size={16} />
+            <IconSend size={16} />
           </button>
         </div>
       </div>
