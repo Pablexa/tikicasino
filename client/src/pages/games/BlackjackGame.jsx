@@ -59,11 +59,14 @@ export default function BlackjackGame() {
   const [bet, setBet] = useState(100)
   const [balance, setBalance] = useState(user?.balance || 0)
   const [loading, setLoading] = useState(false)
+  const [otherHands, setOtherHands] = useState({})
 
   useEffect(() => { setBalance(user?.balance || 0) }, [user?.balance])
 
   useEffect(() => {
     if (!socket) return
+
+    socket.emit('blackjack:join', { roomCode })
 
     const onState = ({ state: s, balance: b }) => {
       setState(s)
@@ -80,16 +83,36 @@ export default function BlackjackGame() {
     const onError = ({ message }) => { toast.error(message); setLoading(false) }
     const onBalanceUpdate = ({ balance: b }) => { setBalance(b); updateBalance(b) }
 
+    const onRoomHands = (hands) => {
+      setOtherHands(hands)
+    }
+
+    const onRoomHand = ({ userId, nickname, avatar, state: s }) => {
+      if (userId === user?.id) return
+      setOtherHands(prev => {
+        if (s.phase === 'betting' || !s.phase) {
+          const copy = { ...prev }
+          delete copy[userId]
+          return copy
+        }
+        return { ...prev, [userId]: { nickname, avatar, state: s } }
+      })
+    }
+
     socket.on('blackjack:state', onState)
     socket.on('blackjack:error', onError)
     socket.on('balance:update', onBalanceUpdate)
+    socket.on('blackjack:roomHands', onRoomHands)
+    socket.on('room:blackjack:hand', onRoomHand)
 
     return () => {
       socket.off('blackjack:state', onState)
       socket.off('blackjack:error', onError)
       socket.off('balance:update', onBalanceUpdate)
+      socket.off('blackjack:roomHands', onRoomHands)
+      socket.off('room:blackjack:hand', onRoomHand)
     }
-  }, [socket])
+  }, [socket, roomCode])
 
   const emit = useCallback((event, data = {}) => {
     if (!socket || loading) return
@@ -257,6 +280,42 @@ export default function BlackjackGame() {
                 </div>
               )}
             </div>
+
+            {/* Other active blackjack tables in the room */}
+            {Object.keys(otherHands).length > 0 && (
+              <div className="glass rounded-2xl p-5 border border-white/5 space-y-4">
+                <h3 className="font-display font-bold text-sm text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                  👥 Otras Mesas en la Sala
+                </h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {Object.entries(otherHands).map(([uId, p]) => (
+                    <div key={uId} className="bg-black/30 border border-white/5 p-4 rounded-xl flex flex-col justify-between space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-white truncate max-w-[120px]">{p.nickname}</span>
+                        <span className="text-xs text-yellow-400 font-mono font-bold bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">{p.state.bet.toLocaleString()} C</span>
+                      </div>
+                      
+                      {p.state.playerHand?.length > 0 ? (
+                        <div className="flex gap-1 flex-wrap justify-center py-2 bg-black/10 rounded-lg min-h-[70px] items-center">
+                          {p.state.playerHand.map((c, i) => <PlayingCard key={i} card={c} small />)}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-tiki-muted text-center py-4">Esperando apuesta…</p>
+                      )}
+
+                      <div className="flex items-center justify-between text-xs text-tiki-muted border-t border-white/5 pt-2">
+                        <span>Valor: <strong className="text-tiki-green font-mono">{p.state.playerValue}</strong></span>
+                        {p.state.result && (
+                          <span className={`font-bold ${RESULT_COLORS[p.state.result] || 'text-white'}`}>
+                            {RESULT_LABELS[p.state.result] || p.state.result}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Rules */}
             <div className="glass rounded-2xl p-4 text-xs text-tiki-muted space-y-1">

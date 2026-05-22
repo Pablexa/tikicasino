@@ -46,13 +46,13 @@ export default function Room() {
       setOnlineUsers(new Set(ou))
     })
 
-    socket.on('room:memberJoined', ({ userId, nickname }) => {
+    socket.on('room:memberJoined', ({ userId, nickname, avatar, balance }) => {
       setOnlineUsers(prev => new Set([...prev, userId]))
       setRoom(prev => {
         if (!prev) return prev
         const exists = prev.members.find(m => m.userId === userId)
         if (exists) return prev
-        return { ...prev, members: [...prev.members, { userId, user: { nickname, avatar: 'tiki1' }, role: 'member' }] }
+        return { ...prev, members: [...prev.members, { userId, user: { nickname, avatar: avatar || 'tiki1', balance }, role: 'member' }] }
       })
     })
 
@@ -67,6 +67,20 @@ export default function Room() {
       }
     })
 
+    socket.on('room:balanceUpdate', ({ userId, balance }) => {
+      setRoom(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          members: prev.members.map(m =>
+            m.userId === userId
+              ? { ...m, user: { ...m.user, balance } }
+              : m
+          )
+        }
+      })
+    })
+
     socket.on('balance:update', ({ balance }) => {
       // Saldo updates handled by Navbar via auth context
     })
@@ -77,6 +91,7 @@ export default function Room() {
       socket.off('room:memberJoined')
       socket.off('room:memberLeft')
       socket.off('room:kicked')
+      socket.off('room:balanceUpdate')
       socket.off('balance:update')
     }
   }, [socket, room?.id])

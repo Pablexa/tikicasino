@@ -51,6 +51,33 @@ export function setupGameSocket(io, socket) {
   const user = socket.user;
 
   // ── BLACKJACK ──────────────────────────────────────────────
+  const broadcastBlackjackHand = (roomCode, state) => {
+    io.to(`room:${roomCode}`).emit('room:blackjack:hand', {
+      userId: user.id,
+      nickname: user.nickname,
+      avatar: user.avatar,
+      state
+    });
+  };
+
+  socket.on('blackjack:join', ({ roomCode }) => {
+    if (!roomCode) return;
+    const roomState = getOrCreateRoomState(roomCode);
+    if (!roomState.blackjack) roomState.blackjack = {};
+    
+    const activeHands = {};
+    Object.entries(roomState.blackjack).forEach(([uId, s]) => {
+      if (s && s.phase && s.phase !== 'betting') {
+        activeHands[uId] = {
+          nickname: s.nickname || 'Jugador',
+          avatar: s.avatar || 'tiki1',
+          state: s
+        };
+      }
+    });
+    socket.emit('blackjack:roomHands', activeHands);
+  });
+
   socket.on('blackjack:bet', async ({ roomCode, amount }) => {
     try {
       const betAmount = parseInt(amount);
@@ -71,10 +98,14 @@ export function setupGameSocket(io, socket) {
       const result = blackjackBet(playerState, betAmount, freshUser.balance);
       if (!result.success) { socket.emit('blackjack:error', { message: result.error }); return; }
 
+      playerState.nickname = user.nickname;
+      playerState.avatar = user.avatar;
+
       const newBalance = await deductBet(user.id, betAmount, 'blackjack', room.id);
       if (newBalance === null) { socket.emit('blackjack:error', { message: 'Error al descontar apuesta.' }); return; }
 
       socket.emit('blackjack:state', { state: result.state, balance: newBalance });
+      broadcastBlackjackHand(roomCode, result.state);
 
       if (result.state.result) {
         if (result.state.payout > 0) {
@@ -99,6 +130,7 @@ export function setupGameSocket(io, socket) {
       const result = blackjackHit(playerState);
       if (!result.success) { socket.emit('blackjack:error', { message: result.error }); return; }
       socket.emit('blackjack:state', { state: result.state });
+      broadcastBlackjackHand(roomCode, result.state);
       if (result.state.result === 'bust') {
         await emitBalanceUpdate(io, user.id);
         await broadcastSystemMessage(io, roomCode, room.id, `${user.nickname} se pasó en Blackjack!`);
@@ -116,6 +148,7 @@ export function setupGameSocket(io, socket) {
       const result = blackjackStand(playerState);
       if (!result.success) { socket.emit('blackjack:error', { message: result.error }); return; }
       socket.emit('blackjack:state', { state: result.state });
+      broadcastBlackjackHand(roomCode, result.state);
       if (result.state.payout > 0) {
         const txType = result.state.result === 'win' ? 'blackjack_win' : 'blackjack_push';
         await creditPayout(user.id, result.state.payout, txType, 'blackjack', room.id);
@@ -140,6 +173,7 @@ export function setupGameSocket(io, socket) {
       if (!result.success) { socket.emit('blackjack:error', { message: result.error }); return; }
       if (result.extraBet) await deductBet(user.id, result.extraBet, 'blackjack', room.id);
       socket.emit('blackjack:state', { state: result.state });
+      broadcastBlackjackHand(roomCode, result.state);
       if (result.state.payout > 0) {
         await creditPayout(user.id, result.state.payout,
           result.state.result === 'win' ? 'blackjack_win' : 'blackjack_push', 'blackjack', room.id);
@@ -154,6 +188,7 @@ export function setupGameSocket(io, socket) {
     if (!playerState) return;
     const result = blackjackNewRound(playerState);
     socket.emit('blackjack:state', { state: result.state });
+    broadcastBlackjackHand(roomCode, result.state);
   });
 
   // ── ROULETTE ──────────────────────────────────────────────

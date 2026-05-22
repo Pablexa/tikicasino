@@ -29,10 +29,23 @@ export function setupRoomSocket(io, socket) {
       }
 
       // Check if kicked
-      const membership = room.members.find(m => m.userId === user.id);
+      let membership = room.members.find(m => m.userId === user.id);
       if (membership?.isKicked) {
         socket.emit('error', { message: 'You have been removed from this room.' });
         return;
+      }
+
+      // If user joined by invitation link directly, register them automatically
+      if (!membership) {
+        await prisma.roomMember.create({
+          data: { roomId: room.id, userId: user.id, role: 'member' }
+        });
+        const latestUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { id: true, nickname: true, avatar: true, balance: true }
+        });
+        membership = { userId: user.id, role: 'member', user: latestUser };
+        room.members.push(membership);
       }
 
       // Join socket room
@@ -55,11 +68,12 @@ export function setupRoomSocket(io, socket) {
         },
       });
 
-      // Notify room that user joined
+      // Notify room that user joined (with their real balance!)
       socket.to(`room:${roomCode}`).emit('room:memberJoined', {
         userId: user.id,
         nickname: user.nickname,
         avatar: user.avatar,
+        balance: membership.user?.balance ?? user.balance,
       });
 
       // Send room state to the joining user

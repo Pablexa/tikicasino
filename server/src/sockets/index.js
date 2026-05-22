@@ -113,19 +113,27 @@ export function setupSocketHandlers(io) {
   });
 }
 
-/**
- * Emit balance update to a specific user
- */
 export async function emitBalanceUpdate(io, userId) {
   const socketId = userSockets.get(userId);
-  if (!socketId) return;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { balance: true },
   });
 
-  if (user) {
+  if (!user) return;
+
+  if (socketId) {
     io.to(socketId).emit('balance:update', { balance: user.balance });
+  }
+
+  // Broadcast the balance update to all rooms this user is currently in
+  for (const [roomCode, users] of roomUsers.entries()) {
+    if (users.has(userId)) {
+      io.to(`room:${roomCode}`).emit('room:balanceUpdate', {
+        userId,
+        balance: user.balance,
+      });
+    }
   }
 }
