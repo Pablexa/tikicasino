@@ -19,6 +19,8 @@ import SlotsGame from './pages/games/SlotsGame.jsx'
 import CrashGame from './pages/games/CrashGame.jsx'
 import CoinflipGame from './pages/games/CoinflipGame.jsx'
 import DiceGame from './pages/games/DiceGame.jsx'
+import PokerGame from './pages/games/PokerGame.jsx'
+import LiarsBarGame from './pages/games/LiarsBarGame.jsx'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -64,6 +66,8 @@ function AppRoutes() {
       <Route path="/room/:roomCode/crash" element={<ProtectedRoute><CrashGame /></ProtectedRoute>} />
       <Route path="/room/:roomCode/coinflip" element={<ProtectedRoute><CoinflipGame /></ProtectedRoute>} />
       <Route path="/room/:roomCode/dice" element={<ProtectedRoute><DiceGame /></ProtectedRoute>} />
+      <Route path="/room/:roomCode/poker" element={<ProtectedRoute><PokerGame /></ProtectedRoute>} />
+      <Route path="/room/:roomCode/liarsbar" element={<ProtectedRoute><LiarsBarGame /></ProtectedRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

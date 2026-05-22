@@ -11,12 +11,14 @@ import api from '../lib/api.js'
 import toast from 'react-hot-toast'
 
 const GAMES = [
-  { id: 'blackjack', name: 'Blackjack', desc: 'Superá al dealer', color: 'from-violet-600/20 to-purple-700/20', border: 'border-violet-500/20' },
-  { id: 'roulette', name: 'Ruleta', desc: 'Girá la ruleta', color: 'from-emerald-600/20 to-teal-700/20', border: 'border-emerald-500/20' },
-  { id: 'slots', name: 'Slots', desc: 'Máquina de 5 rodillos', color: 'from-yellow-600/20 to-orange-700/20', border: 'border-yellow-500/20' },
-  { id: 'crash', name: 'Crash', desc: 'Retirá a tiempo', color: 'from-red-600/20 to-rose-700/20', border: 'border-red-500/20' },
-  { id: 'coinflip', name: 'Moneda', desc: 'Cara o ceca', color: 'from-cyan-600/20 to-sky-700/20', border: 'border-cyan-500/20' },
-  { id: 'dice', name: 'Dados', desc: 'Más alto o más bajo', color: 'from-pink-600/20 to-fuchsia-700/20', border: 'border-pink-500/20' },
+  { id: 'blackjack', name: 'Blackjack', desc: 'Superá al dealer', color: 'from-violet-600/20 to-purple-700/20', border: 'border-violet-500/20', emoji: '🃏' },
+  { id: 'roulette', name: 'Ruleta', desc: 'Girá la ruleta', color: 'from-emerald-600/20 to-teal-700/20', border: 'border-emerald-500/20', emoji: '🎰' },
+  { id: 'slots', name: 'Slots', desc: 'Máquina de 5 rodillos', color: 'from-yellow-600/20 to-orange-700/20', border: 'border-yellow-500/20', emoji: '🎳' },
+  { id: 'crash', name: 'Crash', desc: 'Retirá a tiempo', color: 'from-red-600/20 to-rose-700/20', border: 'border-red-500/20', emoji: '🚀' },
+  { id: 'coinflip', name: 'Moneda', desc: 'Cara o ceca', color: 'from-cyan-600/20 to-sky-700/20', border: 'border-cyan-500/20', emoji: '🪙' },
+  { id: 'dice', name: 'Dados', desc: 'Más alto o más bajo', color: 'from-pink-600/20 to-fuchsia-700/20', border: 'border-pink-500/20', emoji: '🎲' },
+  { id: 'poker', name: 'Video Poker', desc: 'Jacks or Better', color: 'from-indigo-600/20 to-blue-700/20', border: 'border-indigo-500/20', emoji: '♠️' },
+  { id: 'liarsbar', name: "Liar's Bar", desc: '2-15 jugadores · ¡Mentira!', color: 'from-orange-600/20 to-amber-700/20', border: 'border-orange-500/20', emoji: '🎭', multiplayer: true },
 ]
 
 export default function Room() {
@@ -169,22 +171,20 @@ export default function Room() {
             {/* Games */}
             <div>
               <h2 className="font-display font-bold text-lg text-tiki-text mb-4">Elegí un juego</h2>
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 {GAMES.map(game => (
                   <motion.div
                     key={game.id}
-                    whileHover={{ y: -4, scale: 1.02 }}
-                    className={`game-card bg-gradient-to-br ${game.color} border ${game.border} p-5 cursor-pointer`}
+                    whileHover={{ y: -3, scale: 1.02 }}
+                    className={`game-card bg-gradient-to-br ${game.color} border ${game.border} p-4 cursor-pointer`}
                     onClick={() => navigate(`/room/${roomCode}/${game.id}`)}
                   >
-                    <h3 className="font-display font-bold text-tiki-text text-lg">{game.name}</h3>
-                    <p className="text-xs text-tiki-muted mt-1">{game.desc}</p>
-                    <div className="mt-4">
-                      <span className="text-xs font-semibold text-tiki-green flex items-center gap-1">
-                        Jugar
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><polyline points="9 18 15 12 9 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>
-                      </span>
-                    </div>
+                    <div className="text-2xl mb-2">{game.emoji}</div>
+                    <h3 className="font-display font-bold text-tiki-text text-sm">{game.name}</h3>
+                    <p className="text-xs text-tiki-muted mt-0.5">{game.desc}</p>
+                    {game.multiplayer && (
+                      <span className="badge-violet text-xs mt-2 inline-block">Multijugador</span>
+                    )}
                   </motion.div>
                 ))}
               </div>

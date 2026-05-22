@@ -7,9 +7,15 @@ services:
     rootDir: .
     buildCommand: "cd client && npm install && npm run build && cd ../server && npm install && npx prisma generate"
     startCommand: "cd server && npm start"
+    disk:
+      name: tikicasino-db
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        value: "file:/data/tikicasino.db"
       - key: JWT_SECRET
         generateValue: true
       - key: COOKIE_SECRET

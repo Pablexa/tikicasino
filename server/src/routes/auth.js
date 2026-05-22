@@ -37,19 +37,9 @@ authRouter.post('/register', registerRateLimit, authRateLimit, async (req, res) 
     const data = registerSchema.parse(req.body);
     const avatar = VALID_AVATARS.includes(data.avatar) ? data.avatar : 'tiki1';
 
-    // Get and hash IP
+    // Get and hash IP (stored for analytics, no longer blocks registration)
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const ipHash = hashIp(ip);
-
-    // Block if this IP already has an account
-    const existingFromIp = await prisma.user.findFirst({
-      where: { registrationIp: ipHash },
-    });
-    if (existingFromIp) {
-      return res.status(429).json({
-        error: 'Ya existe una cuenta registrada desde esta red. Una cuenta por persona.',
-      });
-    }
 
     // Check nickname
     const existingNickname = await prisma.user.findUnique({

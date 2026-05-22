@@ -2,34 +2,31 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../db/client.js';
-import { requireAuth, requireVerifiedEmail } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
 import { z } from 'zod';
 
 export const roomsRouter = Router();
 
 const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const MAX_PLAYERS = 15;
 
 function generateRoomCode() {
   let code = '';
-  const arr = new Uint32Array(6);
-  crypto.getRandomValues ? crypto.getRandomValues(arr) : null;
   for (let i = 0; i < 6; i++) {
-    const rand = arr[i] ?? Math.floor(Math.random() * ROOM_CODE_CHARS.length);
-    code += ROOM_CODE_CHARS[rand % ROOM_CODE_CHARS.length];
+    code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
   }
   return code;
 }
 
 // POST /api/rooms/create
-roomsRouter.post('/create', requireAuth, requireVerifiedEmail, async (req, res) => {
+roomsRouter.post('/create', requireAuth, async (req, res) => {
   try {
     const { name, settings } = req.body;
 
     if (!name || name.trim().length < 3 || name.trim().length > 30) {
-      return res.status(400).json({ error: 'Room name must be between 3 and 30 characters.' });
+      return res.status(400).json({ error: 'El nombre debe tener entre 3 y 30 caracteres.' });
     }
 
-    // Generate unique code
     let code;
     let attempts = 0;
     do {
@@ -42,10 +39,8 @@ roomsRouter.post('/create', requireAuth, requireVerifiedEmail, async (req, res) 
     const defaultSettings = {
       minBet: 10,
       maxBet: 50000,
-      enabledGames: ['blackjack', 'roulette', 'slots', 'crash', 'coinflip', 'dice'],
-      allowSameIp: false,
-      requireAccountAge24h: false,
-      whitelistOnly: false,
+      maxPlayers: MAX_PLAYERS,
+      enabledGames: ['blackjack', 'roulette', 'slots', 'crash', 'coinflip', 'dice', 'poker', 'liarsbar'],
       locked: false,
     };
 
@@ -58,10 +53,7 @@ roomsRouter.post('/create', requireAuth, requireVerifiedEmail, async (req, res) 
         ownerId: req.user.id,
         settings: JSON.stringify(roomSettings),
         members: {
-          create: {
-            userId: req.user.id,
-            role: 'owner',
-          },
+          create: { userId: req.user.id, role: 'owner' },
         },
       },
       include: {
@@ -77,15 +69,15 @@ roomsRouter.post('/create', requireAuth, requireVerifiedEmail, async (req, res) 
     res.status(201).json({ room: formatRoom(room) });
   } catch (err) {
     console.error('Create room error:', err);
-    res.status(500).json({ error: 'Failed to create room.' });
+    res.status(500).json({ error: 'Error al crear la sala.' });
   }
 });
 
 // POST /api/rooms/join
-roomsRouter.post('/join', requireAuth, requireVerifiedEmail, async (req, res) => {
+roomsRouter.post('/join', requireAuth, async (req, res) => {
   try {
     const { code } = req.body;
-    if (!code) return res.status(400).json({ error: 'Room code is required.' });
+    if (!code) return res.status(400).json({ error: 'Código de sala requerido.' });
 
     const room = await prisma.room.findUnique({
       where: { code: code.toUpperCase() },
@@ -95,34 +87,30 @@ roomsRouter.post('/join', requireAuth, requireVerifiedEmail, async (req, res) =>
       },
     });
 
-    if (!room) return res.status(404).json({ error: 'Room not found.' });
-    if (!room.isActive) return res.status(400).json({ error: 'This room is closed.' });
+    if (!room) return res.status(404).json({ error: 'Sala no encontrada.' });
+    if (!room.isActive) return res.status(400).json({ error: 'Esta sala está cerrada.' });
 
     const settings = JSON.parse(room.settings || '{}');
     if (settings.locked) {
-      return res.status(403).json({ error: 'This room is locked. Ask the owner to unlock it.' });
+      return res.status(403).json({ error: 'La sala está bloqueada. Pedile al dueño que la abra.' });
     }
 
-    if (members.length >= 16) {
-      return res.status(400).json({ error: 'This room is full (max 16 players).' });
+    const currentMax = settings.maxPlayers || MAX_PLAYERS;
+    if (room.members.length >= currentMax) {
+      return res.status(400).json({ error: `La sala está llena (máx. ${currentMax} jugadores).` });
     }
 
-    // Check if already a member
     const existingMember = await prisma.roomMember.findUnique({
       where: { roomId_userId: { roomId: room.id, userId: req.user.id } },
     });
 
     if (existingMember?.isKicked) {
-      return res.status(403).json({ error: 'You have been removed from this room.' });
+      return res.status(403).json({ error: 'Fuiste removido de esta sala.' });
     }
 
     if (!existingMember) {
       await prisma.roomMember.create({
-        data: {
-          roomId: room.id,
-          userId: req.user.id,
-          role: 'member',
-        },
+        data: { roomId: room.id, userId: req.user.id, role: 'member' },
       });
     }
 
@@ -142,7 +130,7 @@ roomsRouter.post('/join', requireAuth, requireVerifiedEmail, async (req, res) =>
     res.json({ room: formatRoom(updatedRoom) });
   } catch (err) {
     console.error('Join room error:', err);
-    res.status(500).json({ error: 'Failed to join room.' });
+    res.status(500).json({ error: 'Error al unirse a la sala.' });
   }
 });
 
@@ -162,12 +150,11 @@ roomsRouter.get('/:roomCode', requireAuth, async (req, res) => {
       },
     });
 
-    if (!room) return res.status(404).json({ error: 'Room not found.' });
-
+    if (!room) return res.status(404).json({ error: 'Sala no encontrada.' });
     res.json({ room: formatRoom(room) });
   } catch (err) {
     console.error('Get room error:', err);
-    res.status(500).json({ error: 'Failed to get room.' });
+    res.status(500).json({ error: 'Error al obtener la sala.' });
   }
 });
 
@@ -178,9 +165,9 @@ roomsRouter.patch('/:roomCode/settings', requireAuth, async (req, res) => {
       where: { code: req.params.roomCode.toUpperCase() },
     });
 
-    if (!room) return res.status(404).json({ error: 'Room not found.' });
+    if (!room) return res.status(404).json({ error: 'Sala no encontrada.' });
     if (room.ownerId !== req.user.id) {
-      return res.status(403).json({ error: 'Only the room owner can change settings.' });
+      return res.status(403).json({ error: 'Solo el dueño puede cambiar la configuración.' });
     }
 
     const currentSettings = JSON.parse(room.settings || '{}');
@@ -197,7 +184,7 @@ roomsRouter.patch('/:roomCode/settings', requireAuth, async (req, res) => {
     res.json({ settings: JSON.parse(updated.settings) });
   } catch (err) {
     console.error('Update room settings error:', err);
-    res.status(500).json({ error: 'Failed to update settings.' });
+    res.status(500).json({ error: 'Error al actualizar la sala.' });
   }
 });
 
@@ -209,12 +196,12 @@ roomsRouter.post('/:roomCode/kick', requireAuth, async (req, res) => {
       where: { code: req.params.roomCode.toUpperCase() },
     });
 
-    if (!room) return res.status(404).json({ error: 'Room not found.' });
+    if (!room) return res.status(404).json({ error: 'Sala no encontrada.' });
     if (room.ownerId !== req.user.id) {
-      return res.status(403).json({ error: 'Only the room owner can kick members.' });
+      return res.status(403).json({ error: 'Solo el dueño puede expulsar miembros.' });
     }
     if (userId === req.user.id) {
-      return res.status(400).json({ error: 'You cannot kick yourself.' });
+      return res.status(400).json({ error: 'No podés expulsarte a vos mismo.' });
     }
 
     await prisma.roomMember.update({
@@ -222,41 +209,10 @@ roomsRouter.post('/:roomCode/kick', requireAuth, async (req, res) => {
       data: { isKicked: true },
     });
 
-    res.json({ message: 'Player has been removed from the room.' });
+    res.json({ message: 'Jugador removido de la sala.' });
   } catch (err) {
     console.error('Kick error:', err);
-    res.status(500).json({ error: 'Failed to kick player.' });
-  }
-});
-
-// POST /api/rooms/:roomCode/invites
-roomsRouter.post('/:roomCode/invites', requireAuth, requireVerifiedEmail, async (req, res) => {
-  try {
-    const room = await prisma.room.findUnique({
-      where: { code: req.params.roomCode.toUpperCase() },
-    });
-
-    if (!room) return res.status(404).json({ error: 'Room not found.' });
-    if (room.ownerId !== req.user.id) {
-      return res.status(403).json({ error: 'Only the room owner can create invites.' });
-    }
-
-    // Generate unique invite code
-    const inviteCode = `${req.user.nickname.slice(0, 5).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-
-    const invite = await prisma.invite.create({
-      data: {
-        roomId: room.id,
-        code: inviteCode,
-        createdById: req.user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      },
-    });
-
-    res.status(201).json({ invite });
-  } catch (err) {
-    console.error('Create invite error:', err);
-    res.status(500).json({ error: 'Failed to create invite.' });
+    res.status(500).json({ error: 'Error al expulsar al jugador.' });
   }
 });
 
