@@ -5,10 +5,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Use SQLite for local development, PostgreSQL for production
-// Switch to postgresql when DATABASE_URL is set to a PostgreSQL URL
+// PostgreSQL en produccion (Neon), SQLite en local
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -44,6 +43,7 @@ model User {
   chatMessages      ChatMessage[]
   achievements      Achievement[]
   gameRounds        GameRoundPlayer[]
+  gameHistory       GameHistory[]
   sentInvites       Invite[]           @relation("InviteCreator")
   usedInvites       Invite[]           @relation("InviteUser")
 
@@ -183,4 +183,20 @@ model Achievement {
 
   @@unique([userId, type])
   @@map("achievements")
+}
+
+model GameHistory {
+  id         String   @id @default(cuid())
+  userId     String
+  gameType   String
+  betAmount  Int
+  outcome    String   // "win" | "loss" | "push"
+  payout     Int      @default(0)
+  metadata   String?  // JSON string
+  createdAt  DateTime @default(now())
+
+  // Relations
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("game_history")
 }
