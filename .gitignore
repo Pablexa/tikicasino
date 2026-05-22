@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+client/dist/
+server/public/
+
+# Database files (don't commit the dev DB)
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/prisma/prod.db
+*.db
+*.db-journal
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Temp scripts
+rename_coins.py
+rename_coins.cjs
+translate.cjs
+fix_names.cjs

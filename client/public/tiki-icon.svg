@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="tg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <!-- Tiki face base -->
+  <rect x="16" y="8" width="32" height="48" rx="8" fill="url(#tg)" opacity="0.9"/>
+  <!-- Eyes -->
+  <ellipse cx="24" cy="26" rx="4" ry="5" fill="#0f172a"/>
+  <ellipse cx="40" cy="26" rx="4" ry="5" fill="#0f172a"/>
+  <circle cx="25" cy="24" r="1.5" fill="#22d3ee"/>
+  <circle cx="41" cy="24" r="1.5" fill="#22d3ee"/>
+  <!-- Nose -->
+  <rect x="28" y="32" width="8" height="4" rx="2" fill="#0f172a" opacity="0.6"/>
+  <!-- Mouth -->
+  <path d="M22 42 Q32 50 42 42" stroke="#0f172a" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <!-- Crown/head ornament -->
+  <path d="M20 8 L24 2 L28 7 L32 1 L36 7 L40 2 L44 8Z" fill="url(#tg)"/>
+  <!-- Side decorations -->
+  <rect x="8" y="28" width="8" height="3" rx="1.5" fill="url(#tg)" opacity="0.6"/>
+  <rect x="48" y="28" width="8" height="3" rx="1.5" fill="url(#tg)" opacity="0.6"/>
+</svg>

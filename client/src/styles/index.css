@@ -1,0 +1,279 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  @apply font-sans antialiased;
+  background-color: #060d08;
+  color: #f0fdf4;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(34,197,94,0.10) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 35% at 90% 80%, rgba(132,204,22,0.06) 0%, transparent 60%);
+  background-attachment: fixed;
+}
+
+#root { min-height: 100vh; }
+
+/* ─── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #060d08; }
+::-webkit-scrollbar-thumb { background: #1a3022; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #2d5038; }
+
+/* ─── Selection ─────────────────────────────────────── */
+::selection { background: rgba(34,197,94,0.25); color: #f0fdf4; }
+
+/* ─── Glass ──────────────────────────────────────────── */
+@layer components {
+  .glass {
+    background: rgba(10, 30, 15, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(34,197,94,0.1);
+    border-radius: 16px;
+  }
+
+  .glass-heavy {
+    background: rgba(10, 30, 15, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(34,197,94,0.15);
+    border-radius: 20px;
+  }
+
+  /* ─── Buttons ─── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 cursor-pointer select-none;
+    outline: none; border: none;
+  }
+  .btn:disabled { @apply opacity-40 cursor-not-allowed; }
+
+  .btn-primary {
+    @apply btn;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: #060d08;
+    font-weight: 700;
+    box-shadow: 0 0 16px rgba(34,197,94,0.3);
+  }
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 0 28px rgba(34,197,94,0.55);
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+  }
+  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+  .btn-gold {
+    @apply btn;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #060d08; font-weight: 700;
+    box-shadow: 0 0 16px rgba(245,158,11,0.25);
+  }
+  .btn-gold:hover:not(:disabled) {
+    box-shadow: 0 0 28px rgba(245,158,11,0.45);
+    transform: translateY(-1px);
+  }
+
+  .btn-green {
+    @apply btn-primary;
+  }
+
+  .btn-ghost {
+    @apply btn text-tiki-muted;
+    background: transparent;
+    border: 1px solid rgba(34,197,94,0.15);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    color: #4ade80;
+    border-color: rgba(34,197,94,0.35);
+    background: rgba(34,197,94,0.06);
+  }
+
+  .btn-danger {
+    @apply btn;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: #fff; font-weight: 700;
+  }
+  .btn-danger:hover:not(:disabled) {
+    box-shadow: 0 0 24px rgba(239,68,68,0.4);
+    transform: translateY(-1px);
+  }
+
+  /* ─── Inputs ─── */
+  .input {
+    @apply w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200;
+    background: rgba(10,30,15,0.7);
+    border: 1px solid rgba(34,197,94,0.15);
+    color: #f0fdf4;
+    outline: none;
+  }
+  .input::placeholder { color: #4d7a5a; }
+  .input:focus {
+    border-color: rgba(34,197,94,0.5);
+    box-shadow: 0 0 0 3px rgba(34,197,94,0.1);
+    background: rgba(10,30,15,0.9);
+  }
+  .input:disabled { @apply opacity-50 cursor-not-allowed; }
+
+  /* ─── Badges ─── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+  .badge-cyan, .badge-green {
+    @apply badge;
+    background: rgba(34,197,94,0.12);
+    color: #4ade80;
+    border: 1px solid rgba(34,197,94,0.25);
+  }
+  .badge-gold {
+    @apply badge;
+    background: rgba(245,158,11,0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245,158,11,0.25);
+  }
+  .badge-red {
+    @apply badge;
+    background: rgba(239,68,68,0.12);
+    color: #f87171;
+    border: 1px solid rgba(239,68,68,0.25);
+  }
+  .badge-violet {
+    @apply badge;
+    background: rgba(139,92,246,0.12);
+    color: #a78bfa;
+    border: 1px solid rgba(139,92,246,0.25);
+  }
+
+  /* ─── Game cards ─── */
+  .game-card {
+    @apply rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 relative;
+    border: 1px solid rgba(34,197,94,0.1);
+    background: rgba(10,30,15,0.5);
+  }
+  .game-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.6), 0 0 24px rgba(34,197,94,0.12);
+    border-color: rgba(34,197,94,0.25);
+  }
+
+  /* ─── Neon text ─── */
+  .neon-green {
+    color: #4ade80;
+    text-shadow: 0 0 20px rgba(74,222,128,0.6);
+  }
+  .neon-lime {
+    color: #a3e635;
+    text-shadow: 0 0 20px rgba(163,230,53,0.5);
+  }
+  .neon-gold {
+    color: #fbbf24;
+    text-shadow: 0 0 20px rgba(251,191,36,0.5);
+  }
+  .neon-violet {
+    color: #a78bfa;
+    text-shadow: 0 0 20px rgba(167,139,250,0.5);
+  }
+
+  /* ─── Gradient text ─── */
+  .gradient-text {
+    background: linear-gradient(135deg, #4ade80, #a3e635);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .gradient-text-gold {
+    background: linear-gradient(135deg, #fbbf24, #f87171);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .section-card { @apply glass p-6 rounded-2xl; }
+
+  .divider {
+    @apply w-full h-px;
+    background: linear-gradient(90deg, transparent, rgba(34,197,94,0.15), transparent);
+  }
+
+  /* ─── Playing cards ─── */
+  .playing-card {
+    @apply inline-flex flex-col items-center justify-center rounded-xl font-bold font-display select-none;
+    background: linear-gradient(145deg, #0f1f15, #060d08);
+    border: 2px solid rgba(34,197,94,0.2);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    aspect-ratio: 2/3;
+    min-width: 52px; min-height: 78px;
+  }
+  .playing-card.red { color: #f87171; }
+  .playing-card.black { color: #f0fdf4; }
+  .playing-card.hidden {
+    background: repeating-linear-gradient(45deg, #1a3022, #1a3022 4px, #0f1f15 4px, #0f1f15 8px);
+  }
+
+  /* ─── Bet quick buttons ─── */
+  .bet-quick-btn {
+    @apply px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer;
+    background: rgba(10,30,15,0.6);
+    border: 1px solid rgba(34,197,94,0.15);
+    color: #4d7a5a;
+  }
+  .bet-quick-btn:hover {
+    background: rgba(34,197,94,0.08);
+    border-color: rgba(34,197,94,0.35);
+    color: #4ade80;
+  }
+}
+
+/* ─── Neon border anim ─── */
+@keyframes neonBorder {
+  0%, 100% { border-color: rgba(34,197,94,0.2); box-shadow: 0 0 12px rgba(34,197,94,0.15); }
+  50% { border-color: rgba(132,204,22,0.4); box-shadow: 0 0 24px rgba(132,204,22,0.25); }
+}
+.neon-border { animation: neonBorder 3s ease-in-out infinite; }
+
+/* ─── Crash ─── */
+.crash-multiplier {
+  font-size: clamp(3rem, 10vw, 6rem);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+}
+
+/* ─── Roulette ─── */
+.roulette-number {
+  @apply flex items-center justify-center rounded-lg font-bold text-sm transition-all duration-200 cursor-pointer select-none;
+  min-width: 36px; height: 36px;
+}
+.roulette-number:hover { transform: scale(1.1); filter: brightness(1.3); }
+.roulette-number.selected {
+  transform: scale(1.15);
+  filter: brightness(1.5);
+  box-shadow: 0 0 12px rgba(255,255,255,0.3);
+  outline: 2px solid white;
+}
+.roulette-number.red { background: #dc2626; }
+.roulette-number.black { background: #1e293b; }
+.roulette-number.green { background: #16a34a; }
+
+/* ─── Spinner ─── */
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid rgba(34,197,94,0.2);
+  border-top-color: #22c55e;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Chat ─── */
+.chat-messages { scrollbar-width: thin; }
+.chat-message-system { color: #a78bfa; font-style: italic; font-size: 0.75rem; }
+
+/* ─── Responsive ─── */
+@media (max-width: 640px) {
+  .playing-card { min-width: 40px; min-height: 60px; font-size: 12px; }
+  .roulette-number { min-width: 28px; height: 28px; font-size: 10px; }
+}

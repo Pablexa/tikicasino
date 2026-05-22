@@ -1,0 +1,26 @@
+{
+  "preset": "green",
+  "version": "1.0.0",
+  "sensitivity": {
+    "x": 0.91,
+    "y": 0.79,
+    "scope_x": 0.28,
+    "scope_y": 0.28
+  },
+  "aim": {
+    "smoothing": 6,
+    "fov_radius": 120,
+    "head_offset": 0.18,
+    "target_bone": "head"
+  },
+  "recoil": {
+    "compensation_x": 0,
+    "compensation_y": 0.62
+  },
+  "toggles": {
+    "aim_assist": true,
+    "recoil_ctrl": true,
+    "esp_visible": false,
+    "anti_aim": false
+  }
+}

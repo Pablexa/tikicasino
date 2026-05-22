@@ -1,0 +1,186 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Use SQLite for local development, PostgreSQL for production
+// Switch to postgresql when DATABASE_URL is set to a PostgreSQL URL
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                          String    @id @default(cuid())
+  email                       String?   @unique
+  emailVerified               Boolean   @default(true)
+  emailVerifyToken            String?
+  emailVerifyExpires          DateTime?
+  nickname                    String    @unique
+  avatar                      String    @default("tiki1")
+  passwordHash                String
+  balance                     Int       @default(0)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  lastLoginAt                 DateTime?
+  initialBonusClaimed         Boolean   @default(false)
+  dailyBonusLastClaimedAt     DateTime?
+  dailyBonusStreak            Int       @default(0)
+  emergencyRefillLastClaimedAt DateTime?
+  registrationIp              String?   // hashed IP used to detect multi-accounts
+  hashedIp                    String?
+  deviceId                    String?
+  userAgentHash               String?
+  reputationLevel             Int       @default(0)
+  isBanned                    Boolean   @default(false)
+  banReason                   String?
+
+  // Relations
+  ownedRooms        Room[]             @relation("RoomOwner")
+  roomMemberships   RoomMember[]
+  transactions      BalanceTransaction[]
+  chatMessages      ChatMessage[]
+  achievements      Achievement[]
+  gameRounds        GameRoundPlayer[]
+  sentInvites       Invite[]           @relation("InviteCreator")
+  usedInvites       Invite[]           @relation("InviteUser")
+
+  @@map("users")
+}
+
+model Room {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  ownerId     String
+  isActive    Boolean  @default(true)
+  settings    String   @default("{}") // JSON string
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  owner       User         @relation("RoomOwner", fields: [ownerId], references: [id])
+  members     RoomMember[]
+  transactions BalanceTransaction[]
+  chatMessages ChatMessage[]
+  gameRounds   GameRound[]
+  invites      Invite[]
+
+  @@map("rooms")
+}
+
+model RoomMember {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  role      String   @default("member") // "owner" | "member"
+  joinedAt  DateTime @default(now())
+  isMuted   Boolean  @default(false)
+  isKicked  Boolean  @default(false)
+
+  // Relations
+  room      Room     @relation(fields: [roomId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([roomId, userId])
+  @@map("room_members")
+}
+
+model GameRound {
+  id         String   @id @default(cuid())
+  roomId     String
+  gameType   String
+  status     String   @default("pending") // "pending" | "active" | "finished"
+  result     String?  // JSON string
+  createdAt  DateTime @default(now())
+  endedAt    DateTime?
+
+  // Relations
+  room       Room              @relation(fields: [roomId], references: [id])
+  players    GameRoundPlayer[]
+
+  @@map("game_rounds")
+}
+
+model GameRoundPlayer {
+  id          String    @id @default(cuid())
+  gameRoundId String
+  userId      String
+  betAmount   Int
+  payout      Int       @default(0)
+  result      String?   // "win" | "loss" | "push"
+  metadata    String?   // JSON string
+
+  // Relations
+  gameRound   GameRound @relation(fields: [gameRoundId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@map("game_round_players")
+}
+
+model BalanceTransaction {
+  id            String   @id @default(cuid())
+  userId        String
+  roomId        String?
+  gameType      String?
+  type          String   // TX_TYPES
+  amount        Int      // positive = credit, negative = debit
+  balanceBefore Int
+  balanceAfter  Int
+  metadata      String?  // JSON string
+  createdAt     DateTime @default(now())
+
+  // Relations
+  user          User     @relation(fields: [userId], references: [id])
+  room          Room?    @relation(fields: [roomId], references: [id])
+
+  @@map("balance_transactions")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  type      String   @default("user") // "user" | "system" | "event"
+  message   String
+  createdAt DateTime @default(now())
+
+  // Relations
+  room      Room     @relation(fields: [roomId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("chat_messages")
+}
+
+model Invite {
+  id          String    @id @default(cuid())
+  roomId      String
+  code        String    @unique
+  createdById String
+  usedById    String?
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+
+  // Relations
+  room        Room      @relation(fields: [roomId], references: [id])
+  createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id])
+  usedBy      User?     @relation("InviteUser", fields: [usedById], references: [id])
+
+  @@map("invites")
+}
+
+model Achievement {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // ACHIEVEMENT types
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, type])
+  @@map("achievements")
+}
