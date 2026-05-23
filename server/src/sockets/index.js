@@ -111,6 +111,19 @@ export function setupSocketHandlers(io) {
           }
         }
       }
+
+      // If this user is the owner/host of any room, delete those rooms immediately
+      try {
+        const ownedRooms = await prisma.room.findMany({
+          where: { ownerId: user.id },
+          select: { id: true, code: true }
+        });
+        for (const r of ownedRooms) {
+          await deleteRoom(io, r.id, r.code);
+        }
+      } catch (err) {
+        console.error('Error deleting owned rooms on disconnect:', err);
+      }
     });
   });
 
@@ -131,30 +144,38 @@ export function setupSocketHandlers(io) {
         // 1. If everyone disconnected for > 5 min, OR
         // 2. If the room has been completely inactive for > 3 hours
         if ((isRoomEmpty && timeSinceLastUpdate > EMPTY_GRACE_PERIOD) || timeSinceLastUpdate > THREE_HOURS) {
-          console.log(`[Auto-Cleanup] Deleting inactive/empty room: ${room.code}`);
-          
-          // Notify any remaining sockets in the room that it is deleted
-          io.to(`room:${room.code}`).emit('room:deleted');
-
-          // Transactional cleanup
-          await prisma.$transaction([
-            prisma.chatMessage.deleteMany({ where: { roomId: room.id } }),
-            prisma.roomMember.deleteMany({ where: { roomId: room.id } }),
-            prisma.invite.deleteMany({ where: { roomId: room.id } }),
-            prisma.gameRoundPlayer.deleteMany({ where: { gameRound: { roomId: room.id } } }),
-            prisma.gameRound.deleteMany({ where: { roomId: room.id } }),
-            prisma.balanceTransaction.updateMany({ where: { roomId: room.id }, data: { roomId: null } }),
-            prisma.room.delete({ where: { id: room.id } }),
-          ]);
-
-          roomUsers.delete(room.code);
-          crashEngines.delete(room.code);
+          await deleteRoom(io, room.id, room.code);
         }
       }
     } catch (err) {
       console.error('Error in periodic room cleanup interval:', err);
     }
   }, 120000);
+}
+
+export async function deleteRoom(io, roomId, roomCode) {
+  try {
+    console.log(`[Room-Cleanup] Deleting room: ${roomCode}`);
+    
+    // Notify any remaining sockets in the room that it is deleted
+    io.to(`room:${roomCode}`).emit('room:deleted');
+
+    // Transactional cleanup
+    await prisma.$transaction([
+      prisma.chatMessage.deleteMany({ where: { roomId } }),
+      prisma.roomMember.deleteMany({ where: { roomId } }),
+      prisma.invite.deleteMany({ where: { roomId } }),
+      prisma.gameRoundPlayer.deleteMany({ where: { gameRound: { roomId } } }),
+      prisma.gameRound.deleteMany({ where: { roomId } }),
+      prisma.balanceTransaction.updateMany({ where: { roomId }, data: { roomId: null } }),
+      prisma.room.delete({ where: { id: roomId } }),
+    ]);
+
+    roomUsers.delete(roomCode);
+    crashEngines.delete(roomCode);
+  } catch (err) {
+    console.error(`Error deleting room ${roomCode}:`, err);
+  }
 }
 
 export async function emitBalanceUpdate(io, userId) {

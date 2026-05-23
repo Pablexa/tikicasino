@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { prisma } from '../db/client.js';
 import { requireAuth } from '../middleware/auth.js';
 import { z } from 'zod';
+import { deleteRoom } from '../sockets/index.js';
 
 export const roomsRouter = Router();
 
@@ -18,10 +19,22 @@ function generateRoomCode() {
   return code;
 }
 
-// POST /api/rooms/create
 roomsRouter.post('/create', requireAuth, async (req, res) => {
   try {
     const { name, settings } = req.body;
+
+    const io = req.app.get('io');
+    try {
+      const ownedRooms = await prisma.room.findMany({
+        where: { ownerId: req.user.id },
+        select: { id: true, code: true }
+      });
+      for (const r of ownedRooms) {
+        await deleteRoom(io, r.id, r.code);
+      }
+    } catch (err) {
+      console.error('Error auto-deleting old owned rooms on creation:', err);
+    }
 
     if (!name || name.trim().length < 3 || name.trim().length > 30) {
       return res.status(400).json({ error: 'El nombre debe tener entre 3 y 30 caracteres.' });

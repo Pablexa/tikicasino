@@ -88,6 +88,7 @@ if (process.env.NODE_ENV === 'production') {
 app.use(errorHandler);
 
 // Setup Socket.IO handlers
+app.set('io', io);
 setupSocketHandlers(io);
 
 // Start server

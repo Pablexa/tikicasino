@@ -1,34 +1,63 @@
-// TikiCasino - Liar's Bar Engine (Multiplayer Dice Bluffing)
-// Ruleset: Perudo/Dudo style — players make bids about total dice showing a face value
-// Last player with lives wins
+// TikiCasino - Liar's Bar Engine (Steam Edition)
+// Cards: 'A' (Ace), 'K' (King), 'Q' (Queen), 'Joker' (Wildcard)
+// Includes different tables, wild jokers, and realistic Russian Roulette trigger pulls!
 
-export const MAX_DICE = 5;
-export const MAX_LIVES = 3;
-
-// gameId -> game state
 const games = new Map();
 
-function rollDice(count) {
-  return Array.from({ length: count }, () => Math.floor(Math.random() * 6) + 1);
+function generateDeck() {
+  const deck = [];
+  // 6 of each face card
+  for (let i = 0; i < 6; i++) {
+    deck.push('A', 'K', 'Q');
+  }
+  // 2 jokers
+  deck.push('Joker', 'Joker');
+  return deck;
+}
+
+function shuffle(arr) {
+  const newArr = [...arr];
+  for (let i = newArr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+  }
+  return newArr;
 }
 
 export function createLiarsBarGame(roomCode, playerIds) {
-  const players = playerIds.map(id => ({
-    id,
-    lives: MAX_LIVES,
-    dice: rollDice(MAX_DICE),
-    eliminated: false,
-  }));
+  let deck = shuffle(generateDeck());
+
+  const players = playerIds.map(id => {
+    const hand = [];
+    for (let i = 0; i < 5; i++) {
+      if (deck.length > 0) hand.push(deck.pop());
+    }
+    return {
+      id,
+      lives: 3,
+      hand,
+      triggerPulls: 0,
+      bulletIndex: Math.floor(Math.random() * 6), // 0 to 5 chambers
+      eliminated: false,
+    };
+  });
+
+  // Random table card target ('A', 'K', or 'Q')
+  const tableFaces = ['A', 'K', 'Q'];
+  const tableCard = tableFaces[Math.floor(Math.random() * tableFaces.length)];
 
   const state = {
     roomCode,
     players,
+    tableCard,
     currentPlayerIdx: 0,
-    currentBid: null, // { quantity, faceValue }
-    phase: 'bidding', // bidding | reveal
+    cardsOnTable: [], // all played cards face down
+    lastPlay: null, // { playerId, cards: [], quantity: number }
+    phase: 'bidding', // bidding | reveal | finished
     round: 1,
     lastAction: null,
     winner: null,
+    deck,
   };
 
   games.set(roomCode, state);
@@ -39,117 +68,157 @@ export function getLiarsBarGame(roomCode) {
   return games.get(roomCode) || null;
 }
 
-export function makeBid(roomCode, playerId, quantity, faceValue) {
+export function makeBid(roomCode, playerId, cardIndices) {
   const state = games.get(roomCode);
   if (!state) return { success: false, error: 'Partida no encontrada.' };
-  if (state.phase !== 'bidding') return { success: false, error: 'No es momento de apostar.' };
-  if (state.players[state.currentPlayerIdx].id !== playerId) {
-    return { success: false, error: 'No es tu turno.' };
-  }
-  if (faceValue < 1 || faceValue > 6) return { success: false, error: 'Valor de dado inválido (1-6).' };
-  if (quantity < 1) return { success: false, error: 'Cantidad mínima: 1.' };
-
-  // Bid must be higher than current bid
-  const cur = state.currentBid;
-  if (cur) {
-    const validRaise = quantity > cur.quantity || (quantity === cur.quantity && faceValue > cur.faceValue);
-    if (!validRaise) {
-      return { success: false, error: `Debés apostar más que ${cur.quantity}×${cur.faceValue}.` };
-    }
+  if (state.phase !== 'bidding') return { success: false, error: 'No se pueden jugar cartas ahora.' };
+  
+  const currentPlayer = state.players[state.currentPlayerIdx];
+  if (currentPlayer.id !== playerId) return { success: false, error: 'No es tu turno.' };
+  if (!Array.isArray(cardIndices) || cardIndices.length < 1 || cardIndices.length > 3) {
+    return { success: false, error: 'Debés jugar entre 1 y 3 cartas.' };
   }
 
-  state.currentBid = { quantity, faceValue };
-  state.lastAction = { type: 'bid', playerId, quantity, faceValue };
+  // Verify indices are valid
+  const hand = currentPlayer.hand;
+  for (const idx of cardIndices) {
+    if (idx < 0 || idx >= hand.length) return { success: false, error: 'Índices de cartas inválidos.' };
+  }
+
+  // Extract played cards
+  const playedCards = cardIndices.map(idx => hand[idx]);
+
+  // Remove cards from player's hand (sort descending to not disrupt indexes while splicing)
+  const sortedDesc = [...cardIndices].sort((a, b) => b - a);
+  sortedDesc.forEach(idx => {
+    hand.splice(idx, 1);
+  });
+
+  // Update game state
+  state.cardsOnTable.push(...playedCards);
+  state.lastPlay = {
+    playerId,
+    cards: playedCards,
+    quantity: playedCards.length,
+  };
+
+  state.lastAction = {
+    type: 'play',
+    playerId,
+    quantity: playedCards.length,
+    claimedCard: state.tableCard,
+  };
+
   nextTurn(state);
-
   return { success: true, state: publicState(state) };
 }
 
 export function callLiar(roomCode, playerId) {
   const state = games.get(roomCode);
   if (!state) return { success: false, error: 'Partida no encontrada.' };
-  if (state.phase !== 'bidding') return { success: false, error: 'No es momento de dudar.' };
-  if (state.players[state.currentPlayerIdx].id !== playerId) {
-    return { success: false, error: 'No es tu turno.' };
-  }
-  if (!state.currentBid) return { success: false, error: 'No hay apuesta para dudar.' };
+  if (state.phase !== 'bidding') return { success: false, error: 'No se puede retar ahora.' };
+  if (!state.lastPlay) return { success: false, error: 'No hay jugadas anteriores.' };
+  
+  const challenger = state.players[state.currentPlayerIdx];
+  if (challenger.id !== playerId) return { success: false, error: 'No es tu turno.' };
 
-  // Reveal all dice
   state.phase = 'reveal';
 
-  const { quantity, faceValue } = state.currentBid;
-  const allDice = state.players.filter(p => !p.eliminated).flatMap(p => p.dice);
-  const actual = allDice.filter(d => d === faceValue).length;
+  const playedCards = state.lastPlay.cards;
+  const targetCard = state.tableCard;
+  
+  // A card is a lie if it is not the target card and not a Joker
+  const lies = playedCards.filter(card => card !== targetCard && card !== 'Joker');
+  const isLiar = lies.length > 0;
 
-  // Previous player made the bid
-  const bidderIdx = prevActiveIdx(state);
-  const bidderId = state.players[bidderIdx].id;
-  const callerId = playerId;
+  const bidderIdx = state.players.findIndex(p => p.id === state.lastPlay.playerId);
+  const bidder = state.players[bidderIdx];
 
   let loserIdx;
-  if (actual >= quantity) {
-    // Bid was correct — caller loses a life
-    loserIdx = state.currentPlayerIdx;
-  } else {
-    // Bid was a lie — bidder loses a life
+  if (isLiar) {
+    // Bidder lied! Bidder loses challenge
     loserIdx = bidderIdx;
+  } else {
+    // Bidder told the truth! Challenger loses challenge
+    loserIdx = state.currentPlayerIdx;
   }
 
-  state.players[loserIdx].lives--;
   const loser = state.players[loserIdx];
-  if (loser.lives <= 0) {
-    loser.eliminated = true;
-    loser.dice = [];
+  
+  // Russian Roulette Trigger Pull!
+  loser.triggerPulls++;
+  const gunFired = (loser.triggerPulls - 1) === loser.bulletIndex;
+
+  if (gunFired) {
+    loser.lives--;
+    loser.triggerPulls = 0;
+    loser.bulletIndex = Math.floor(Math.random() * 6); // re-chamber
+    if (loser.lives <= 0) {
+      loser.eliminated = true;
+      loser.hand = [];
+    }
   }
 
-  const aliveCount = state.players.filter(p => !p.eliminated).length;
-  if (aliveCount <= 1) {
-    state.winner = state.players.find(p => !p.eliminated)?.id || null;
+  const alivePlayers = state.players.filter(p => !p.eliminated);
+  if (alivePlayers.length <= 1) {
+    state.winner = alivePlayers[0]?.id || null;
     state.phase = 'finished';
   }
 
   state.lastAction = {
-    type: 'callLiar',
-    callerId,
-    bidderId,
-    bid: state.currentBid,
-    actual,
-    loserIdx,
-    callerWon: actual < quantity,
+    type: 'reveal',
+    callerId: playerId,
+    bidderId: bidder.id,
+    playedCards,
+    isLiar,
+    loserId: loser.id,
+    gunFired,
+    loserLives: loser.lives,
+    triggerPulls: loser.triggerPulls,
   };
 
-  const result = {
-    success: true,
-    reveal: true,
-    allDice: state.players.map(p => ({ id: p.id, dice: p.dice })),
-    actual,
-    bid: state.currentBid,
+  const revealResult = {
+    allDice: state.players.map(p => ({ id: p.id, dice: p.hand })), // keep name compatible
+    actual: lies.length, // count of lies
+    bid: { faceValue: targetCard, quantity: playedCards.length },
     loserIdx,
     loserLives: loser.lives,
+    gunFired,
     winner: state.winner,
     lastAction: state.lastAction,
   };
 
   if (state.phase !== 'finished') {
-    // Start new round
     newRound(state, loserIdx);
   }
 
-  return { success: true, state: publicState(state), ...result };
+  return { success: true, state: publicState(state), ...revealResult };
 }
 
 function newRound(state, startIdx) {
   state.round++;
-  state.currentBid = null;
+  state.cardsOnTable = [];
+  state.lastPlay = null;
   state.phase = 'bidding';
-  // Reroll dice (losers with lives get fewer dice based on... keep simple: all active get MAX_DICE)
+
+  // Deal hands again up to 5 cards per active player
+  let deck = shuffle(generateDeck());
   state.players.forEach(p => {
     if (!p.eliminated) {
-      const diceCount = Math.max(1, MAX_DICE - (MAX_LIVES - p.lives));
-      p.dice = rollDice(diceCount);
+      const hand = [];
+      for (let i = 0; i < 5; i++) {
+        if (deck.length > 0) hand.push(deck.pop());
+      }
+      p.hand = hand;
     }
   });
-  // Start from the loser (if not eliminated), else next active
+  state.deck = deck;
+
+  // Next round table face target
+  const tableFaces = ['A', 'K', 'Q'];
+  state.tableCard = tableFaces[Math.floor(Math.random() * tableFaces.length)];
+
+  // Start round with the loser of previous round (if alive), else next active
   state.currentPlayerIdx = startIdx;
   if (state.players[startIdx].eliminated) nextTurn(state);
 }
@@ -162,33 +231,27 @@ function nextTurn(state) {
   state.currentPlayerIdx = next;
 }
 
-function prevActiveIdx(state) {
-  let prev = (state.currentPlayerIdx - 1 + state.players.length) % state.players.length;
-  while (state.players[prev].eliminated) {
-    prev = (prev - 1 + state.players.length) % state.players.length;
-  }
-  return prev;
-}
-
-// Public state hides other players' dice
 export function publicState(state, requestingPlayerId = null) {
   return {
     roomCode: state.roomCode,
     phase: state.phase,
     round: state.round,
-    currentBid: state.currentBid,
+    tableCard: state.tableCard,
     currentPlayerIdx: state.currentPlayerIdx,
     currentPlayerId: state.players[state.currentPlayerIdx]?.id,
     winner: state.winner,
     lastAction: state.lastAction,
+    cardsOnTableCount: state.cardsOnTable.length,
     players: state.players.map(p => ({
       id: p.id,
       lives: p.lives,
       eliminated: p.eliminated,
-      diceCount: p.dice.length,
-      // Only reveal own dice (or all on reveal phase)
+      diceCount: p.hand.length, // keep key 'diceCount' to avoid UI breaking
+      handCount: p.hand.length,
+      triggerPulls: p.triggerPulls,
+      // Only show hands privately, or reveal everything on completed round
       dice: (state.phase === 'reveal' || state.phase === 'finished' || p.id === requestingPlayerId)
-        ? p.dice : null,
+        ? p.hand : null, // keep key 'dice' for UI compatibility
     })),
   };
 }
@@ -201,5 +264,5 @@ export function getLiarsBarDice(roomCode, playerId) {
   const state = games.get(roomCode);
   if (!state) return null;
   const player = state.players.find(p => p.id === playerId);
-  return player ? player.dice : null;
+  return player ? player.hand : null;
 }

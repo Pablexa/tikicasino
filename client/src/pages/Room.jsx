@@ -128,6 +128,9 @@ export default function Room() {
 
   const kickMember = async (userId) => {
     try {
+      if (socket) {
+        socket.emit('room:kick', { roomCode, targetUserId: userId })
+      }
       await api.post(`/rooms/${roomCode}/kick`, { userId })
       toast.success('Jugador removido')
     } catch (err) {

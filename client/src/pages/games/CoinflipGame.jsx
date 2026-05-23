@@ -240,24 +240,38 @@ export default function CoinflipGame() {
 
 function CoinSvg({ side, size = 100, win }) {
   const isCara = side === 'heads'
+  const gradId = `coinGrad-${side}-${Math.floor(Math.random() * 1000000)}`
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" className="drop-shadow-[0_0_25px_rgba(251,191,36,0.2)]">
       <defs>
-        <linearGradient id="coinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={isCara ? '#22d3ee' : '#a78bfa'}/>
-          <stop offset="100%" stopColor={isCara ? '#0891b2' : '#7c3aed'}/>
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={isCara ? '#fbbf24' : '#c084fc'}/>
+          <stop offset="50%" stopColor={isCara ? '#f59e0b' : '#a855f7'}/>
+          <stop offset="100%" stopColor={isCara ? '#d97706' : '#7c3aed'}/>
         </linearGradient>
       </defs>
-      <circle cx="50" cy="50" r="46" fill="url(#coinGrad)" opacity="0.9"/>
-      <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2"/>
+      
+      {/* Outer coin border */}
+      <circle cx="50" cy="50" r="46" fill={`url(#${gradId})`} stroke={isCara ? '#fef08a' : '#e9d5ff'} strokeWidth="3" opacity="0.95"/>
+      
+      {/* Inner dashed ring */}
+      <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2" strokeDasharray="3, 3"/>
+      
+      {/* Win/Lose overlay */}
       {win !== undefined && (
-        <circle cx="50" cy="50" r="46" fill={win ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}/>
+        <circle cx="50" cy="50" r="46" fill={win ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'}/>
       )}
-      <text x="50" y="42" textAnchor="middle" fontSize="12" fontWeight="bold" fill="rgba(255,255,255,0.9)" fontFamily="Inter">
+      
+      {/* Central icon */}
+      <g transform="translate(50, 46)">
+        <text textAnchor="middle" fontSize="32" fill="white" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.4))' }}>
+          {isCara ? '🌞' : '🦅'}
+        </text>
+      </g>
+      
+      {/* Label */}
+      <text x="50" y="80" textAnchor="middle" fontSize="10" fontWeight="900" fill="white" fontFamily="Inter" style={{ letterSpacing: '0.12em', textShadow: '0px 1px 3px rgba(0,0,0,0.6)' }}>
         {isCara ? 'CARA' : 'CECA'}
-      </text>
-      <text x="50" y="62" textAnchor="middle" fontSize="22" fontWeight="900" fill="white" fontFamily="Inter">
-        {isCara ? '🪙' : '💎'}
       </text>
     </svg>
   )

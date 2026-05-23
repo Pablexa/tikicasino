@@ -1,6 +1,6 @@
 // TikiCasino - Room Socket Handler
 import { prisma } from '../db/client.js';
-import { roomUsers } from './index.js';
+import { roomUsers, deleteRoom } from './index.js';
 
 export function setupRoomSocket(io, socket) {
   const user = socket.user;
@@ -109,7 +109,7 @@ export function setupRoomSocket(io, socket) {
   });
 
   // Leave a room
-  socket.on('room:leave', ({ roomCode }) => {
+  socket.on('room:leave', async ({ roomCode }) => {
     if (!roomCode) return;
     socket.leave(`room:${roomCode}`);
     const users = roomUsers.get(roomCode);
@@ -121,6 +121,18 @@ export function setupRoomSocket(io, socket) {
       nickname: user.nickname,
     });
     socket.currentRoom = null;
+
+    try {
+      const room = await prisma.room.findUnique({
+        where: { code: roomCode.toUpperCase() },
+        select: { id: true, ownerId: true }
+      });
+      if (room && room.ownerId === user.id) {
+        await deleteRoom(io, room.id, roomCode);
+      }
+    } catch (err) {
+      console.error('Error deleting room on room:leave:', err);
+    }
   });
 
   // Kick a user (owner only)

@@ -34,7 +34,7 @@ export function setupTexasHoldemSocket(io, socket) {
       if (existing?.players.find(p => p.id === user.id)) {
         // Rejoin - just subscribe to room
         socket.join(`poker:${roomCode}:${user.id}`);
-        socket.join(`poker:${roomCode}:spectator`);
+        socket.leave(`poker:${roomCode}:spectator`);
         const view = publicTable(existing, user.id);
         socket.emit('poker:state', view);
         return;
@@ -59,7 +59,7 @@ export function setupTexasHoldemSocket(io, socket) {
       }
 
       socket.join(`poker:${roomCode}:${user.id}`);
-      socket.join(`poker:${roomCode}:spectator`);
+      socket.leave(`poker:${roomCode}:spectator`);
 
       const table = getTable(roomCode);
       broadcast(io, roomCode, table);

@@ -48,9 +48,9 @@ export function setupLiarsBarSocket(io, socket) {
     io.to(`liarsbar:${roomCode}`).emit('liarsbar:state', gameState);
   });
 
-  // Place a bid
-  socket.on('liarsbar:bid', ({ roomCode, quantity, faceValue }) => {
-    const result = makeBid(roomCode, user.id, parseInt(quantity), parseInt(faceValue));
+  // Place a bid (play cards)
+  socket.on('liarsbar:bid', ({ roomCode, cardIndices }) => {
+    const result = makeBid(roomCode, user.id, cardIndices);
     if (!result.success) {
       return socket.emit('liarsbar:error', { message: result.error });
     }
