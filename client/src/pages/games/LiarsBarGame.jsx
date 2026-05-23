@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../hooks/useAuth.jsx'
 import { useSocket } from '../../hooks/useSocket.jsx'
 import Navbar from '../../components/Navbar.jsx'
-import ChatPanel from '../../components/ChatPanel.jsx'
+import RightSidebar from '../../components/RightSidebar.jsx'
 import toast from 'react-hot-toast'
+import { playWinSound, playLoseSound } from '../../utils/audio.js'
 
 const DICE_FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
-const LIVES_ICONS = ['', '💀', '❤️❤️', '❤️❤️❤️']
 
 function Die({ value, size = 48 }) {
   return (
@@ -54,7 +54,7 @@ export default function LiarsBarGame() {
   useEffect(() => {
     if (!socket) return
 
-    const onLobby = ({ players, count }) => {
+    const onLobby = ({ players }) => {
       setLobbyPlayers(players)
     }
     const onState = (state) => {
@@ -62,19 +62,27 @@ export default function LiarsBarGame() {
       setPhase(state.phase === 'finished' ? 'finished' : 'bidding')
       setRevealInfo(null)
       if (state.winner) {
-        if (state.winner === user?.id) toast.success('¡Ganaste Liar\'s Bar! 🎉')
-        else toast.error('Perdiste. Mejor suerte la próxima.')
+        if (state.winner === user?.id) {
+          playWinSound()
+          toast.success('¡Ganaste Liar\'s Bar! 🎉')
+        } else {
+          playLoseSound()
+          toast.error('Perdiste. Mejor suerte la próxima.')
+        }
       }
     }
     const onMyDice = ({ dice }) => setMyDice(dice)
     const onReveal = (info) => {
       setRevealInfo(info)
       setPhase('reveal')
-      const won = info.callerWon ? (info.lastAction?.callerId === user?.id) : (info.lastAction?.bidderId === user?.id)
-      // Show what happened
+      
       const loserWasMe = gameState?.players[info.loserIdx]?.id === user?.id
-      if (loserWasMe) toast.error(`¡Perdiste una vida! (${info.actual} dados mostraban ${info.bid?.faceValue})`)
-      else toast(`Se revelaron ${info.actual} dados con ${info.bid?.faceValue}`, { icon: '🎲' })
+      if (loserWasMe) {
+        playLoseSound()
+        toast.error(`¡Perdiste una vida! (${info.actual} dados mostraban ${info.bid?.faceValue})`)
+      } else {
+        toast(`Se revelaron ${info.actual} dados con ${info.bid?.faceValue}`, { icon: '🎲' })
+      }
     }
     const onError = ({ message }) => toast.error(message)
 
@@ -303,8 +311,8 @@ export default function LiarsBarGame() {
             )}
           </div>
 
-          <div className="h-[600px]">
-            <ChatPanel roomCode={roomCode} />
+          <div className="h-[580px] lg:col-span-1">
+            <RightSidebar roomCode={roomCode} />
           </div>
         </div>
       </main>

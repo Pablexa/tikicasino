@@ -20,17 +20,46 @@ export default function CrashGame() {
   const [multiplier, setMultiplicador] = useState(1.00)
   const [crashPoint, setCrashPoint] = useState(null)
   const [history, setHistory] = useState([])
+  
+  // Betting states
   const [hasBet, setHasBet] = useState(false)
   const [cashedOut, setCashedOut] = useState(false)
   const [cashoutInfo, setCashoutInfo] = useState(null)
   const [bettingCountdown, setBettingCountdown] = useState(null)
+  
+  // Auto cashout states
+  const [autoCashoutEnabled, setAutoCashoutEnabled] = useState(false)
+  const [autoCashoutVal, setAutoCashoutVal] = useState(2.00)
+  
   const [showReward, setShowReward] = useState(false)
 
   const countdownRef = useRef(null)
   const canvasRef = useRef(null)
   const graphPointsRef = useRef([])
+  
+  // Keep values fresh in refs to avoid closure stale state in socket callbacks
+  const hasBetRef = useRef(false)
+  const cashedOutRef = useRef(false)
+  const autoEnabledRef = useRef(false)
+  const autoValRef = useRef(2.00)
 
   useEffect(() => { setBalance(user?.balance || 0) }, [user?.balance])
+
+  useEffect(() => {
+    hasBetRef.current = hasBet
+  }, [hasBet])
+
+  useEffect(() => {
+    cashedOutRef.current = cashedOut
+  }, [cashedOut])
+
+  useEffect(() => {
+    autoEnabledRef.current = autoCashoutEnabled
+  }, [autoCashoutEnabled])
+
+  useEffect(() => {
+    autoValRef.current = autoCashoutVal
+  }, [autoCashoutVal])
 
   // Canvas drawing loop
   useEffect(() => {
@@ -44,9 +73,9 @@ export default function CrashGame() {
     ctx.clearRect(0, 0, width, height)
     
     // Draw neon grid background
-    ctx.strokeStyle = 'rgba(255,255,255,0.03)'
+    ctx.strokeStyle = 'rgba(255,255,255,0.025)'
     ctx.lineWidth = 1
-    const gridSize = 30
+    const gridSize = 25
     for (let x = 0; x < width; x += gridSize) {
       ctx.beginPath()
       ctx.moveTo(x, 0)
@@ -61,7 +90,7 @@ export default function CrashGame() {
     }
 
     // Axes lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)'
     ctx.lineWidth = 2
     ctx.beginPath()
     ctx.moveTo(40, 0)
@@ -72,14 +101,9 @@ export default function CrashGame() {
     const points = graphPointsRef.current
 
     if (phase === 'betting' || phase === 'waiting') {
-      // Draw idle waiting state
-      ctx.fillStyle = '#94a3b8'
-      ctx.font = 'bold 15px monospace'
+      // Clean canvas rocket sitting on launchpad
+      ctx.font = '36px Arial'
       ctx.textAlign = 'center'
-      ctx.fillText(phase === 'betting' ? `ESPERANDO APUESTAS... ${bettingCountdown || 10}s` : 'PREPARANDO SIGUIENTE RONDA...', width / 2, height / 2 - 20)
-      
-      // Rocket sitting on launching pad at start
-      ctx.font = '40px Arial'
       ctx.fillText('🚀', 50, height - 55)
     } else if (phase === 'flying' || phase === 'crashed') {
       const startX = 40
@@ -90,10 +114,10 @@ export default function CrashGame() {
       // Render curve
       if (points.length > 0) {
         ctx.beginPath()
-        ctx.strokeStyle = 'rgba(34, 211, 238, 0.8)' // Cyan line
+        ctx.strokeStyle = 'rgba(34, 211, 238, 0.8)' // Cyan curve
         ctx.lineWidth = 4
         ctx.shadowColor = 'rgba(34, 211, 238, 0.6)'
-        ctx.shadowBlur = 12
+        ctx.shadowBlur = 10
 
         ctx.moveTo(startX, startY)
         let lastX = startX
@@ -101,10 +125,8 @@ export default function CrashGame() {
 
         for (let i = 0; i < points.length; i++) {
           const val = points[i]
-          // X goes up linearly based on points length
-          const ratioX = Math.min(i / 100, 1.0)
-          // Y scaled logarithmically to fit big numbers elegantly
-          const ratioY = Math.min(Math.log(val) / Math.log(12), 1.0)
+          const ratioX = Math.min(i / 90, 1.0)
+          const ratioY = Math.min(Math.log(val) / Math.log(8), 1.0)
 
           const x = startX + ratioX * usableW
           const y = startY - ratioY * usableH
@@ -113,19 +135,19 @@ export default function CrashGame() {
           lastY = y
         }
         ctx.stroke()
-        ctx.shadowBlur = 0 // reset shadow
+        ctx.shadowBlur = 0 // reset
 
-        // Fill area under curve with cyan gradient
+        // Gradient under curve
         const gradient = ctx.createLinearGradient(0, startY, 0, 0)
         gradient.addColorStop(0, 'rgba(6, 182, 212, 0.0)')
-        gradient.addColorStop(1, 'rgba(6, 182, 212, 0.12)')
+        gradient.addColorStop(1, 'rgba(6, 182, 212, 0.1)')
         ctx.lineTo(lastX, startY)
         ctx.closePath()
         ctx.fillStyle = gradient
         ctx.fill()
 
-        // Draw the emoji at the tip of the curve
-        ctx.font = '48px Arial'
+        // Draw emoji
+        ctx.font = '42px Arial'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         if (phase === 'crashed') {
@@ -135,12 +157,11 @@ export default function CrashGame() {
         }
       }
     }
-  }, [multiplier, phase, bettingCountdown])
+  }, [multiplier, phase])
 
   useEffect(() => {
     if (!socket) return
 
-    // Join the crash game room
     socket.emit('crash:join', { roomCode })
 
     const onState = (state) => {
@@ -164,8 +185,10 @@ export default function CrashGame() {
       setCashedOut(false)
       setCashoutInfo(null)
       graphPointsRef.current = []
+      
       let sec = Math.ceil(bettingWindowMs / 1000)
       setBettingCountdown(sec)
+      
       if (countdownRef.current) clearInterval(countdownRef.current)
       countdownRef.current = setInterval(() => {
         sec--
@@ -178,6 +201,14 @@ export default function CrashGame() {
       setPhase('flying')
       setMultiplicador(m)
       graphPointsRef.current.push(m)
+      
+      // Auto-cashout trigger logic
+      if (hasBetRef.current && !cashedOutRef.current && autoEnabledRef.current && autoValRef.current > 1.0) {
+        if (m >= autoValRef.current) {
+          socket.emit('crash:cashout', { roomCode })
+          setCashedOut(true) // lock client-side immediately
+        }
+      }
     }
 
     const onCrash = ({ crashPoint: cp, history: h }) => {
@@ -185,10 +216,15 @@ export default function CrashGame() {
       setPhase('crashed')
       setHistory(h || [])
       
-      // Play sound and toast only if user played
-      if (hasBet && !cashedOut) {
+      // Reset countdown interval if any
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current)
+      }
+
+      // Check if this client lost
+      if (hasBetRef.current && !cashedOutRef.current) {
         playLoseSound()
-        toast.error(`Crasheó en ${cp.toFixed(2)}x — ¡Perdiste tu apuesta!`)
+        toast.error(`Explotó en ${cp.toFixed(2)}x — ¡Perdiste tu apuesta!`)
       }
     }
 
@@ -211,6 +247,8 @@ export default function CrashGame() {
 
     const onError = ({ message }) => {
       toast.error(message)
+      setHasBet(false)
+      setCashedOut(false)
     }
     
     const onSaldoUpdate = ({ balance: b }) => {
@@ -238,7 +276,7 @@ export default function CrashGame() {
       socket.off('crash:error', onError)
       socket.off('balance:update', onSaldoUpdate)
     }
-  }, [socket, hasBet, cashedOut])
+  }, [socket, roomCode])
 
   const placeBet = () => {
     if (!socket || phase !== 'betting') { toast.error('Colocá tu apuesta en la fase de apuestas.'); return }
@@ -252,18 +290,10 @@ export default function CrashGame() {
     socket.emit('crash:cashout', { roomCode })
   }
 
-  // Multiplier color styling
   const mColor = phase === 'crashed' ? '#ef4444'
     : multiplier >= 10 ? '#fbbf24'
     : multiplier >= 3 ? '#10b981'
     : '#22d3ee'
-
-  const phaseLabel = {
-    waiting: 'Esperando ronda…',
-    betting: `Apuestas abiertas — ${bettingCountdown}s`,
-    flying: null,
-    crashed: `Explotó en ${crashPoint?.toFixed(2)}x`,
-  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -279,12 +309,11 @@ export default function CrashGame() {
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {/* Crash graph area with Canvas & History */}
+            {/* Graph area */}
             <div className="glass rounded-3xl overflow-hidden p-5 flex flex-col relative" style={{ background: 'radial-gradient(ellipse at bottom, rgba(34,211,238,0.06) 0%, transparent 70%)' }}>
-              <div className="flex items-center justify-between mb-3">
-                {/* Last Rounds History */}
+              <div className="flex items-center justify-between mb-3 z-10">
                 <div className="flex gap-2 flex-wrap items-center">
-                  <span className="text-[10px] text-tiki-muted font-bold uppercase mr-1">Últimas rondas:</span>
+                  <span className="text-[10px] text-tiki-muted font-bold uppercase mr-1">Historial:</span>
                   {history.slice(0, 8).map((h, i) => (
                     <span key={i} className={`text-xs font-mono font-black px-2 py-0.5 rounded-full ${
                       h.crashPoint < 1.5 ? 'bg-red-500/20 text-red-400' :
@@ -295,49 +324,87 @@ export default function CrashGame() {
                     </span>
                   ))}
                 </div>
-                {phase !== 'flying' && phase !== 'crashed' && (
-                  <span className="text-xs text-tiki-muted font-semibold">{phaseLabel[phase]}</span>
+                {phase === 'betting' && (
+                  <span className="text-xs text-yellow-400 font-bold tracking-wider animate-pulse uppercase">
+                    ¡APUESTAS ABIERTAS! — {bettingCountdown}s
+                  </span>
+                )}
+                {phase === 'waiting' && (
+                  <span className="text-xs text-tiki-muted font-semibold animate-pulse uppercase">
+                    Preparando cohete...
+                  </span>
                 )}
               </div>
 
               {/* Graphic Display Area */}
               <div className="relative w-full h-[320px] flex items-center justify-center">
-                {/* Interactive Rocket Canvas */}
                 <canvas ref={canvasRef} width={640} height={320} className="w-full h-full block bg-black/40 rounded-2xl border border-white/5 shadow-inner" />
                 
-                {/* Live Real-Time Multiplier Floating Display */}
+                {/* Clean Central Multiplier Display */}
                 <div className="absolute flex flex-col items-center justify-center pointer-events-none select-none">
                   <motion.div
                     key={phase + multiplier}
                     initial={{ scale: 0.95 }}
-                    animate={{ scale: phase === 'flying' ? [1, 1.05, 1] : 1 }}
-                    transition={{ duration: 0.3 }}
+                    animate={{ scale: phase === 'flying' ? [1, 1.03, 1] : 1 }}
+                    transition={{ duration: 0.2 }}
                   >
                     <span
-                      className="text-6xl font-black font-mono tracking-tight"
+                      className="text-7xl font-black font-mono tracking-tight"
                       style={{ color: mColor, textShadow: `0 0 50px ${mColor}` }}
                     >
                       {phase === 'crashed' ? crashPoint?.toFixed(2) : multiplier.toFixed(2)}×
                     </span>
                   </motion.div>
-                  {phase === 'crashed' && <span className="text-red-400 font-bold tracking-wider text-lg uppercase mt-2 drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">¡EXPLOTÓ!</span>}
-                  {phase === 'betting' && <span className="text-cyan-400 font-semibold text-xs tracking-wider uppercase mt-2 animate-pulse">Colocando Apuestas...</span>}
+                  {phase === 'crashed' && <span className="text-red-400 font-bold tracking-widest text-base uppercase mt-2 drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">¡EXPLOTÓ!</span>}
+                  {phase === 'betting' && <span className="text-cyan-400 font-bold text-xs tracking-widest uppercase mt-2 animate-pulse">APUESTA AHORA</span>}
                 </div>
               </div>
             </div>
 
             {/* Controls */}
             <div className="glass rounded-2xl p-5 space-y-4">
-              <div className="flex gap-3">
-                <input
-                  type="number"
-                  className="input flex-1 font-mono font-bold text-lg"
-                  value={betAmount}
-                  onChange={e => setBetAmount(parseInt(e.target.value) || 0)}
-                  disabled={phase !== 'betting' || hasBet}
-                  min={10}
-                />
-                <span className="flex items-center text-xs text-yellow-500 font-bold">CALDICOINS</span>
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Bet quantity */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-tiki-muted uppercase tracking-wider block">Monto de apuesta</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      className="input flex-1 font-mono font-bold text-lg"
+                      value={betAmount}
+                      onChange={e => setBetAmount(parseInt(e.target.value) || 0)}
+                      disabled={phase !== 'betting' || hasBet}
+                      min={10}
+                    />
+                    <span className="flex items-center text-xs text-yellow-500 font-black">F</span>
+                  </div>
+                </div>
+
+                {/* Auto Cashout Controls */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-tiki-muted uppercase tracking-wider">Retiro Automático (Auto Cashout)</span>
+                    <input
+                      type="checkbox"
+                      checked={autoCashoutEnabled}
+                      onChange={e => setAutoCashoutEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                      disabled={hasBet && phase !== 'betting'}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      className={`input flex-1 font-mono font-bold ${!autoCashoutEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      value={autoCashoutVal}
+                      onChange={e => setAutoCashoutVal(parseFloat(e.target.value) || 1.1)}
+                      disabled={!autoCashoutEnabled || (hasBet && phase !== 'betting')}
+                      min={1.01}
+                    />
+                    <span className="flex items-center text-xs text-cyan-400 font-black">X</span>
+                  </div>
+                </div>
               </div>
 
               {/* Quick bets */}
@@ -348,34 +415,39 @@ export default function CrashGame() {
                 ))}
               </div>
 
-              <div className="flex gap-3">
+              {/* ACTION BUTTON */}
+              <div className="flex gap-3 pt-2">
                 {!hasBet ? (
                   <button
                     onClick={placeBet}
-                    disabled={phase !== 'betting' || hasBet || betAmount < 10 || betAmount > balance}
-                    className="btn-primary flex-1 py-4 justify-center text-base font-black shadow-lg"
+                    disabled={phase !== 'betting' || betAmount < 10 || betAmount > balance}
+                    className={`flex-1 py-4 justify-center text-base font-black rounded-xl transition-all shadow-lg ${
+                      phase === 'betting'
+                        ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-cyan-glow hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+                        : 'bg-white/5 text-tiki-muted border border-white/5 cursor-not-allowed'
+                    }`}
                   >
-                    {phase === 'betting' ? `Apostar ${betAmount.toLocaleString()} CALDICOINS` : 'Esperando Siguiente Ronda…'}
+                    {phase === 'betting' ? `Apostar ${betAmount.toLocaleString()} F` : 'Esperando Siguiente Ronda…'}
                   </button>
                 ) : (
                   <button
                     onClick={cashout}
                     disabled={phase !== 'flying' || cashedOut}
-                    className={`flex-1 py-4 justify-center text-base font-black rounded-xl transition-all ${
+                    className={`flex-1 py-4 justify-center text-lg font-black rounded-xl transition-all ${
                       phase === 'flying' && !cashedOut
-                        ? 'bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-green-glow hover:shadow-[0_0_40px_rgba(16,185,129,0.6)] animate-pulse'
+                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-[0_0_40px_rgba(16,185,129,0.5)] hover:shadow-[0_0_60px_rgba(16,185,129,0.8)] cursor-pointer'
                         : 'bg-white/5 text-tiki-muted border border-white/5 cursor-not-allowed'
                     }`}
                   >
                     {cashedOut ? `¡Retirado en ${cashoutInfo?.cashoutMultiplier?.toFixed(2)}×!` :
-                      phase === 'flying' ? `COBRAR MULTIPLICADOR @ ${multiplier.toFixed(2)}×` : 'Apuesta Colocada — esperando vuelo…'}
+                      phase === 'flying' ? `COBRAR / STOP (@ ${multiplier.toFixed(2)}×)` : 'Apuesta Colocada — esperando vuelo…'}
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Right Sidebar - Chat & Live Bets Switcher */}
+          {/* Right Sidebar */}
           <div className="h-[580px] lg:col-span-1">
             <RightSidebar roomCode={roomCode} />
           </div>
@@ -424,9 +496,9 @@ export default function CrashGame() {
 
               <span className="text-6xl block mb-4">🏆</span>
               <h2 className="font-display font-black text-4xl text-yellow-400 mb-2">
-                ¡GRAN RETIRO!
+                ¡COBRASTE A TIEMPO!
               </h2>
-              <p className="text-tiki-muted text-xs mb-6">Felicidades, cobraste a tiempo en la ronda.</p>
+              <p className="text-tiki-muted text-xs mb-6">Felicidades, lograste bajarte del cohete.</p>
               
               <div className="bg-white/5 border border-white/10 p-5 rounded-2xl mb-6">
                 <span className="text-[10px] text-tiki-muted uppercase font-bold tracking-wider block mb-1">
@@ -439,7 +511,7 @@ export default function CrashGame() {
                   Caldicoins Acreditados
                 </span>
                 <span className="text-2xl font-mono font-black text-yellow-400 block">
-                  +{cashoutInfo?.payout?.toLocaleString()} CALDICOINS
+                  +{cashoutInfo?.payout?.toLocaleString()} F
                 </span>
               </div>
 

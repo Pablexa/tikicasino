@@ -47,7 +47,7 @@ export function SocketProvider({ children }) {
       setSocket(null)
       setConnected(false)
     }
-  }, [user])
+  }, [user?.id])
 
   return (
     <SocketContext.Provider value={{ socket, connected }}>
