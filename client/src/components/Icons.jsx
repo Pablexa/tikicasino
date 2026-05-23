@@ -6,7 +6,7 @@ export function IconCoin({ size = 20, className = '' }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
       <circle cx="12" cy="12" r="10" stroke="#fbbf24" strokeWidth="2"/>
       <circle cx="12" cy="12" r="7" fill="rgba(251,191,36,0.15)" stroke="#fbbf24" strokeWidth="1"/>
-      <text x="12" y="16" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#fbbf24" fontFamily="Inter">F</text>
+      <text x="12" y="15.5" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#fbbf24" fontFamily="Inter" dominantBaseline="central">C</text>
     </svg>
   )
 }
@@ -79,7 +79,7 @@ export function IconCoinFlip({ size = 20, className = '' }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
       <ellipse cx="12" cy="12" rx="8" ry="10" fill="rgba(6,182,212,0.15)" stroke="#06b6d4" strokeWidth="1.5"/>
       <ellipse cx="12" cy="10" rx="8" ry="2" fill="rgba(6,182,212,0.3)" stroke="#06b6d4" strokeWidth="1"/>
-      <text x="12" y="14" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#22d3ee" fontFamily="Inter">F</text>
+      <text x="12" y="13.5" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#22d3ee" fontFamily="Inter" dominantBaseline="central">C</text>
     </svg>
   )
 }

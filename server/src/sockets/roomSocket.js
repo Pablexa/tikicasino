@@ -9,9 +9,10 @@ export function setupRoomSocket(io, socket) {
   socket.on('room:join', async ({ roomCode }) => {
     try {
       if (!roomCode) return;
+      const code = roomCode.toUpperCase();
 
       const room = await prisma.room.findUnique({
-        where: { code: roomCode.toUpperCase() },
+        where: { code },
         include: {
           members: {
             where: { isKicked: false },
@@ -48,15 +49,22 @@ export function setupRoomSocket(io, socket) {
         room.members.push(membership);
       }
 
+      // Leave all other rooms of the room:*, liarsbar:*, roulette:* pattern to prevent interconnection
+      for (const r of socket.rooms) {
+        if (r !== `room:${code}` && (r.startsWith('room:') || r.startsWith('liarsbar:') || r.startsWith('roulette:'))) {
+          socket.leave(r);
+        }
+      }
+
       // Join socket room
-      socket.join(`room:${roomCode}`);
+      socket.join(`room:${code}`);
 
       // Track in-memory
-      if (!roomUsers.has(roomCode)) {
-        roomUsers.set(roomCode, new Set());
+      if (!roomUsers.has(code)) {
+        roomUsers.set(code, new Set());
       }
-      roomUsers.get(roomCode).add(user.id);
-      socket.currentRoom = roomCode;
+      roomUsers.get(code).add(user.id);
+      socket.currentRoom = code;
 
       // Get chat history
       const chatHistory = await prisma.chatMessage.findMany({
@@ -69,7 +77,7 @@ export function setupRoomSocket(io, socket) {
       });
 
       // Notify room that user joined (with their real balance!)
-      socket.to(`room:${roomCode}`).emit('room:memberJoined', {
+      socket.to(`room:${code}`).emit('room:memberJoined', {
         userId: user.id,
         nickname: user.nickname,
         avatar: user.avatar,
@@ -100,7 +108,7 @@ export function setupRoomSocket(io, socket) {
           type: msg.type,
           createdAt: msg.createdAt,
         })),
-        onlineUsers: [...(roomUsers.get(roomCode) || [])],
+        onlineUsers: [...(roomUsers.get(code) || [])],
       });
     } catch (err) {
       console.error('room:join error:', err);
@@ -111,12 +119,13 @@ export function setupRoomSocket(io, socket) {
   // Leave a room
   socket.on('room:leave', async ({ roomCode }) => {
     if (!roomCode) return;
-    socket.leave(`room:${roomCode}`);
-    const users = roomUsers.get(roomCode);
+    const code = roomCode.toUpperCase();
+    socket.leave(`room:${code}`);
+    const users = roomUsers.get(code);
     if (users) {
       users.delete(user.id);
     }
-    io.to(`room:${roomCode}`).emit('room:memberLeft', {
+    io.to(`room:${code}`).emit('room:memberLeft', {
       userId: user.id,
       nickname: user.nickname,
     });
@@ -124,22 +133,28 @@ export function setupRoomSocket(io, socket) {
 
     try {
       const room = await prisma.room.findUnique({
-        where: { code: roomCode.toUpperCase() },
+        where: { code },
         select: { id: true, ownerId: true }
       });
-      if (room && room.ownerId === user.id) {
-        await deleteRoom(io, room.id, roomCode);
+      if (room) {
+        // Simply update room timestamp to reset empty timer on owner leaving
+        await prisma.room.update({
+          where: { id: room.id },
+          data: { updatedAt: new Date() }
+        });
       }
     } catch (err) {
-      console.error('Error deleting room on room:leave:', err);
+      console.error('Error updating room timestamp on leave:', err);
     }
   });
 
   // Kick a user (owner only)
   socket.on('room:kick', async ({ roomCode, targetUserId }) => {
     try {
+      if (!roomCode) return;
+      const code = roomCode.toUpperCase();
       const room = await prisma.room.findUnique({
-        where: { code: roomCode?.toUpperCase() },
+        where: { code },
       });
 
       if (!room || room.ownerId !== user.id) {
@@ -153,7 +168,7 @@ export function setupRoomSocket(io, socket) {
       });
 
       // Force-disconnect the kicked user from the room
-      io.to(`room:${roomCode}`).emit('room:kicked', { userId: targetUserId });
+      io.to(`room:${code}`).emit('room:kicked', { userId: targetUserId });
     } catch (err) {
       console.error('room:kick error:', err);
     }

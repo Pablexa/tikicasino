@@ -95,15 +95,8 @@ export function setupChatSocket(io, socket) {
  */
 export async function broadcastSystemMessage(io, roomCode, roomId, message) {
   try {
-    await prisma.chatMessage.create({
-      data: {
-        roomId,
-        userId: 'system',
-        message,
-        type: 'system',
-      },
-    }).catch(() => {}); // Ignore errors for system messages
-
+    // Avoid saving transient system messages to the DB to prevent foreign key violations,
+    // as "system" is not an actual user inside the users table.
     io.to(`room:${roomCode}`).emit('chat:message', {
       id: `sys-${Date.now()}`,
       userId: 'system',

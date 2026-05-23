@@ -68,24 +68,134 @@ export default function CrashGame() {
     const ctx = canvas.getContext('2d')
     const width = canvas.width
     const height = canvas.height
+
+    // Helper to draw a beautiful vectorized rocket / explosion
+    const drawRocket = (c, rx, ry, isCrashed, scale = 1.0) => {
+      c.save()
+      c.translate(rx, ry)
+      c.scale(scale, scale)
+
+      if (isCrashed) {
+        // Draw gorgeous neon explosion sunburst
+        c.shadowColor = '#f97316'
+        c.shadowBlur = 25
+        c.fillStyle = '#ea580c'
+        c.beginPath()
+        for (let i = 0; i < 16; i++) {
+          const angle = (i * Math.PI) / 8
+          const r = i % 2 === 0 ? 28 : 12
+          c.lineTo(Math.cos(angle) * r, Math.sin(angle) * r)
+        }
+        c.closePath()
+        c.fill()
+
+        // Inner glowing yellow core
+        c.shadowColor = '#facc15'
+        c.shadowBlur = 12
+        c.fillStyle = '#facc15'
+        c.beginPath()
+        for (let i = 0; i < 16; i++) {
+          const angle = (i * Math.PI) / 8
+          const r = i % 2 === 0 ? 14 : 6
+          c.lineTo(Math.cos(angle) * r, Math.sin(angle) * r)
+        }
+        c.closePath()
+        c.fill()
+      } else {
+        // Rotate to point diagonal up-right (45 degrees clockwise aligns perfectly with rising curve)
+        c.rotate(Math.PI / 4)
+
+        // 1. Draw glowing rocket flame behind the body
+        c.shadowColor = '#f97316'
+        c.shadowBlur = 15
+        const flameGrad = c.createLinearGradient(0, 5, 0, 24)
+        flameGrad.addColorStop(0, '#facc15')
+        flameGrad.addColorStop(0.4, '#ea580c')
+        flameGrad.addColorStop(1, 'rgba(239, 68, 68, 0)')
+        c.fillStyle = flameGrad
+        c.beginPath()
+        c.moveTo(-4, 6)
+        c.lineTo(4, 6)
+        c.lineTo(0, 20 + Math.random() * 6) // flickering effect!
+        c.closePath()
+        c.fill()
+
+        // 2. Wings (cyan theme matching glassmorphism)
+        c.shadowColor = '#06b6d4'
+        c.shadowBlur = 10
+        c.fillStyle = '#0891b2'
+        // Left wing
+        c.beginPath()
+        c.moveTo(-5, 0)
+        c.lineTo(-11, 9)
+        c.lineTo(-5, 9)
+        c.closePath()
+        c.fill()
+        // Right wing
+        c.beginPath()
+        c.moveTo(5, 0)
+        c.lineTo(11, 9)
+        c.lineTo(5, 9)
+        c.closePath()
+        c.fill()
+
+        // 3. Main capsule body (sleek white vector)
+        c.shadowBlur = 15
+        c.shadowColor = 'rgba(255, 255, 255, 0.5)'
+        c.fillStyle = '#ffffff'
+        c.beginPath()
+        c.moveTo(0, -16) // Nose tip
+        c.bezierCurveTo(5, -10, 5, 4, 5, 8) // right boundary
+        c.lineTo(-5, 8) // base
+        c.bezierCurveTo(-5, 4, -5, -10, 0, -16) // left boundary
+        c.closePath()
+        c.fill()
+
+        // 4. Red cockpit tip
+        c.fillStyle = '#ef4444'
+        c.beginPath()
+        c.moveTo(0, -16)
+        c.bezierCurveTo(2.5, -13, 3.5, -9, 3.5, -7)
+        c.lineTo(-3.5, -7)
+        c.bezierCurveTo(-3.5, -9, -2.5, -13, 0, -16)
+        c.closePath()
+        c.fill()
+
+        // 5. Glowing cyan cabin window
+        c.fillStyle = '#06b6d4'
+        c.beginPath()
+        c.arc(0, -2, 2.8, 0, Math.PI * 2)
+        c.fill()
+        c.strokeStyle = '#22d3ee'
+        c.lineWidth = 1
+        c.stroke()
+      }
+
+      c.restore()
+    }
     
     // Clear canvas
     ctx.clearRect(0, 0, width, height)
     
-    // Draw neon grid background
-    ctx.strokeStyle = 'rgba(255,255,255,0.025)'
+    // Draw neon grid background with custom scrolling motion based on multiplier
+    const gridSize = 30
+    const scrollOffset = phase === 'flying' ? (multiplier * 20) % gridSize : 0
+
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.035)' // Subtle grid lines
     ctx.lineWidth = 1
-    const gridSize = 25
-    for (let x = 0; x < width; x += gridSize) {
+    
+    for (let x = -gridSize; x < width + gridSize; x += gridSize) {
       ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, height)
+      const scrolledX = x - scrollOffset
+      ctx.moveTo(scrolledX, 0)
+      ctx.lineTo(scrolledX, height)
       ctx.stroke()
     }
-    for (let y = 0; y < height; y += gridSize) {
+    for (let y = -gridSize; y < height + gridSize; y += gridSize) {
       ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(width, y)
+      const scrolledY = y + scrollOffset
+      ctx.moveTo(0, scrolledY)
+      ctx.lineTo(width, scrolledY)
       ctx.stroke()
     }
 
@@ -102,9 +212,7 @@ export default function CrashGame() {
 
     if (phase === 'betting' || phase === 'waiting') {
       // Clean canvas rocket sitting on launchpad
-      ctx.font = '36px Arial'
-      ctx.textAlign = 'center'
-      ctx.fillText('🚀', 50, height - 55)
+      drawRocket(ctx, 50, height - 55, false, 1.1)
     } else if (phase === 'flying' || phase === 'crashed') {
       const startX = 40
       const startY = height - 40
@@ -114,47 +222,60 @@ export default function CrashGame() {
       // Render curve
       if (points.length > 0) {
         ctx.beginPath()
-        ctx.strokeStyle = 'rgba(34, 211, 238, 0.8)' // Cyan curve
-        ctx.lineWidth = 4
-        ctx.shadowColor = 'rgba(34, 211, 238, 0.6)'
-        ctx.shadowBlur = 10
-
-        ctx.moveTo(startX, startY)
+        
+        // Find max value in history to auto-scale the graph curve elegantly
+        const maxVal = Math.max(...points, 2.0)
+        
         let lastX = startX
         let lastY = startY
+        let finalRatioY = 0
 
+        // Create line points
         for (let i = 0; i < points.length; i++) {
           const val = points[i]
-          const ratioX = Math.min(i / 90, 1.0)
-          const ratioY = Math.min(Math.log(val) / Math.log(8), 1.0)
+          const ratioX = Math.min(i / (points.length + 12), 0.95)
+          // Professional quadratic bend upward
+          const ratioY = Math.min(Math.pow((val - 1) / (maxVal - 0.5), 1.35), 0.88)
 
           const x = startX + ratioX * usableW
           const y = startY - ratioY * usableH
-          ctx.lineTo(x, y)
+          
+          if (i === 0) {
+            ctx.moveTo(x, y)
+          } else {
+            ctx.lineTo(x, y)
+          }
           lastX = x
           lastY = y
+          finalRatioY = ratioY
         }
+        
+        // Setup stroke styling
+        const strokeGrad = ctx.createLinearGradient(startX, startY, lastX, lastY)
+        strokeGrad.addColorStop(0, '#a855f7') // Violet base
+        strokeGrad.addColorStop(1, '#22d3ee') // Cyan tip
+        ctx.strokeStyle = strokeGrad
+        ctx.lineWidth = 5
+        ctx.shadowColor = 'rgba(34, 211, 238, 0.6)'
+        ctx.shadowBlur = 12
         ctx.stroke()
-        ctx.shadowBlur = 0 // reset
+        ctx.shadowBlur = 0 // reset shadow
 
         // Gradient under curve
         const gradient = ctx.createLinearGradient(0, startY, 0, 0)
-        gradient.addColorStop(0, 'rgba(6, 182, 212, 0.0)')
-        gradient.addColorStop(1, 'rgba(6, 182, 212, 0.1)')
+        gradient.addColorStop(0, 'rgba(168, 85, 247, 0.0)')
+        gradient.addColorStop(0.5, 'rgba(6, 182, 212, 0.03)')
+        gradient.addColorStop(1, 'rgba(34, 211, 238, 0.15)')
         ctx.lineTo(lastX, startY)
         ctx.closePath()
         ctx.fillStyle = gradient
         ctx.fill()
 
-        // Draw emoji
-        ctx.font = '42px Arial'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        if (phase === 'crashed') {
-          ctx.fillText('💥', lastX, lastY)
-        } else {
-          ctx.fillText('🚀', lastX, lastY)
-        }
+        // Size perspective: Shrink rocket from 1.1x down to 0.6x as it climbs up!
+        const scaleFactor = phase === 'crashed' ? 1.0 : Math.max(0.6, 1.15 - (finalRatioY * 0.55))
+
+        // Draw vectorized rocket
+        drawRocket(ctx, lastX, lastY, phase === 'crashed', scaleFactor)
       }
     }
   }, [multiplier, phase])
@@ -376,7 +497,7 @@ export default function CrashGame() {
                       disabled={phase !== 'betting' || hasBet}
                       min={10}
                     />
-                    <span className="flex items-center text-xs text-yellow-500 font-black">F</span>
+                    <span className="flex items-center text-xs text-yellow-500 font-black">C</span>
                   </div>
                 </div>
 
@@ -427,7 +548,7 @@ export default function CrashGame() {
                         : 'bg-white/5 text-tiki-muted border border-white/5 cursor-not-allowed'
                     }`}
                   >
-                    {phase === 'betting' ? `Apostar ${betAmount.toLocaleString()} F` : 'Esperando Siguiente Ronda…'}
+                    {phase === 'betting' ? `Apostar ${betAmount.toLocaleString()} C` : 'Esperando Siguiente Ronda…'}
                   </button>
                 ) : (
                   <button
@@ -511,7 +632,7 @@ export default function CrashGame() {
                   Caldicoins Acreditados
                 </span>
                 <span className="text-2xl font-mono font-black text-yellow-400 block">
-                  +{cashoutInfo?.payout?.toLocaleString()} F
+                  +{cashoutInfo?.payout?.toLocaleString()} C
                 </span>
               </div>
 

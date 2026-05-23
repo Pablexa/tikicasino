@@ -12,6 +12,7 @@
     "@react-three/drei": "^9.99.0",
     "@react-three/fiber": "^8.15.16",
     "axios": "^1.6.7",
+    "chess.js": "^1.4.0",
     "framer-motion": "^11.0.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -7,7 +7,7 @@ generator client {
 
 // PostgreSQL en produccion (Neon), SQLite en local
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 

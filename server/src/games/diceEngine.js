@@ -20,7 +20,7 @@ export function playDice(target, direction, betAmount, userBalance) {
     return { success: false, error: 'Bet must be greater than 0.' };
   }
   if (betAmount > userBalance) {
-    return { success: false, error: 'Insufficient FCOINS.' };
+    return { success: false, error: 'CALDICOINS insuficientes.' };
   }
 
   const roll = randomInt(1, 100);

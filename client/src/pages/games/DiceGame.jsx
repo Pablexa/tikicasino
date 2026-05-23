@@ -86,7 +86,18 @@ export default function DiceGame() {
             <div className="glass rounded-3xl p-8 text-center" style={{ background: 'radial-gradient(ellipse at center, rgba(236,72,153,0.08) 0%, transparent 70%)' }}>
               <AnimatePresence mode="wait">
                 {rolling ? (
-                  <motion.div key="rolling" animate={{ rotate: [0, 90, 180, 270, 360] }} transition={{ duration: 0.5, repeat: 2 }}>
+                  <motion.div 
+                    key="rolling" 
+                    animate={{ 
+                      rotateX: [0, 360, 720, 1080],
+                      rotateY: [0, 180, 540, 900],
+                      rotateZ: [0, 90, 270, 450],
+                      scale: [1, 1.3, 0.85, 1.05, 1],
+                      y: [0, -100, 30, -10, 0]
+                    }} 
+                    transition={{ duration: 1.1, ease: "easeInOut" }}
+                    style={{ perspective: 1000 }}
+                  >
                     <DiceSvg value={Math.ceil(Math.random() * 6)} size={120} />
                   </motion.div>
                 ) : result ? (

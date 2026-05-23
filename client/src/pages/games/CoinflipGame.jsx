@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Canvas, useFrame } from '@react-three/fiber'
+import { useGLTF, Center, Environment, OrbitControls } from '@react-three/drei'
 import { useAuth } from '../../hooks/useAuth.jsx'
 import { useSocket } from '../../hooks/useSocket.jsx'
 import Navbar from '../../components/Navbar.jsx'
@@ -8,6 +10,70 @@ import BalanceBadge from '../../components/BalanceBadge.jsx'
 import RightSidebar from '../../components/RightSidebar.jsx'
 import toast from 'react-hot-toast'
 import { playWinSound, playLoseSound } from '../../utils/audio.js'
+
+// Preload gold coin 3D model
+useGLTF.preload('/gold coin 3d model.glb')
+
+function Coin3D({ flipping, result }) {
+  const { scene } = useGLTF('/gold coin 3d model.glb')
+  const coinRef = useRef()
+
+  // Process and force high-end shiny gold materials on the loaded mesh
+  useEffect(() => {
+    if (scene) {
+      scene.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+          if (child.material) {
+            child.material.metalness = 0.98  // Force ultra-high metal shine
+            child.material.roughness = 0.12  // Smooth polished surface
+            child.material.needsUpdate = true
+          }
+        }
+      })
+    }
+  }, [scene])
+
+  useFrame((state) => {
+    if (!coinRef.current) return
+    const t = state.clock.getElapsedTime()
+
+    if (flipping) {
+      // High-speed vertical head-over-heels flip (spin on X and Y)
+      coinRef.current.rotation.x += 0.55
+      coinRef.current.rotation.y += 0.12
+      coinRef.current.rotation.z = -Math.PI / 2  // Force the Tiki mask to stay oriented upright
+      coinRef.current.position.y = Math.sin(t * 15) * 1.3
+    } else if (result) {
+      // Settle perfectly standed up facing the camera (rotation.x = PI / 2)
+      // Heads: rotation.y = 0, Tails: rotation.y = PI
+      const targetRotX = Math.PI / 2
+      const targetRotY = result.result === 'heads' ? 0 : Math.PI
+      coinRef.current.rotation.x += (targetRotX - coinRef.current.rotation.x) * 0.15
+      coinRef.current.rotation.y += (targetRotY - coinRef.current.rotation.y) * 0.15
+      coinRef.current.rotation.z = -Math.PI / 2  // Force the Tiki mask to stay oriented upright
+      coinRef.current.position.y += (0 - coinRef.current.position.y) * 0.15
+    } else {
+      // Idle float (gentle stand up tilt, left-to-right rotation to show depth)
+      coinRef.current.rotation.x = Math.PI / 2 + Math.sin(t * 0.5) * 0.05
+      coinRef.current.rotation.y = Math.sin(t * 1.5) * 0.25
+      coinRef.current.rotation.z = -Math.PI / 2  // Force the Tiki mask to stay oriented upright
+      coinRef.current.position.y = Math.sin(t * 2.5) * 0.12
+    }
+  })
+
+  return (
+    <Center>
+      <primitive 
+        ref={coinRef} 
+        object={scene} 
+        scale={[2.0, 2.0, 2.0]} 
+        position={[0, 0, 0]}
+      />
+    </Center>
+  )
+}
 
 export default function CoinflipGame() {
   const { roomCode } = useParams()
@@ -81,21 +147,51 @@ export default function CoinflipGame() {
             {/* Coin display */}
             <div className="glass rounded-3xl p-10 text-center" style={{ background: 'radial-gradient(ellipse at center, rgba(6,182,212,0.08) 0%, transparent 70%)' }}>
               <div className="flex justify-center mb-8">
-                <AnimatePresence mode="wait">
-                  {flipping ? (
-                    <motion.div key="flip" animate={{ rotateY: [0, 360, 720, 1080] }} transition={{ duration: 1.2, ease: 'easeOut' }}>
-                      <CoinSvg side="heads" size={140} />
-                    </motion.div>
-                  ) : result ? (
-                    <motion.div key="result" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring' }}>
-                      <CoinSvg side={result.result} size={140} win={result.win} />
-                    </motion.div>
-                  ) : (
-                    <motion.div key="idle" animate={{ y: [0, -10, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                      <CoinSvg side="heads" size={140} />
-                    </motion.div>
+                <div className="w-[300px] h-[300px] relative rounded-3xl overflow-hidden border border-cyan-500/10 bg-black/40 shadow-[inset_0_0_20px_rgba(6,182,212,0.15)] flex items-center justify-center">
+                  
+                  {/* Floating HUD Badge to indicate side clearly */}
+                  {result && (
+                    <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-10 select-none pointer-events-none">
+                      <span className="text-[9px] text-tiki-muted font-black tracking-widest">LADO</span>
+                      <motion.span 
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border shadow-lg ${
+                          result.result === 'heads'
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-cyan-500/10'
+                            : 'bg-violet-500/20 text-violet-300 border-violet-500/40 shadow-violet-500/10'
+                        }`}
+                      >
+                        {result.result === 'heads' ? '🌞 CARA' : '🦅 CECA'}
+                      </motion.span>
+                    </div>
                   )}
-                </AnimatePresence>
+
+                  <Suspense fallback={
+                    <div className="text-cyan-400 text-xs font-bold flex flex-col items-center gap-2">
+                      <span className="spinner scale-75" />
+                      Cargando Caldicoin 3D...
+                    </div>
+                  }>
+                    <Canvas camera={{ position: [0, 0, 4.0], fov: 45 }} className="w-full h-full">
+                      {/* Ambient and directional lights adapt to result side dynamically */}
+                      <ambientLight intensity={result ? 2.5 : 1.8} color={
+                        result ? (result.result === 'heads' ? '#22d3ee' : '#c084fc') : '#ffffff'
+                      } />
+                      <directionalLight 
+                        position={[0, 5, 5]} 
+                        intensity={result ? 4.5 : 3.5} 
+                        color={result ? (result.result === 'heads' ? '#06b6d4' : '#a855f7') : '#ffffff'} 
+                        castShadow 
+                      />
+                      <pointLight position={[-5, 5, -5]} color="#06b6d4" intensity={4} />
+                      <pointLight position={[5, -5, 5]} color="#a855f7" intensity={5} />
+                      <Coin3D flipping={flipping} result={result} />
+                      <Environment preset="sunset" />
+                      <OrbitControls enableZoom={false} />
+                    </Canvas>
+                  </Suspense>
+                </div>
               </div>
 
               {result && (
@@ -209,7 +305,9 @@ export default function CoinflipGame() {
                 ))}
               </div>
 
-              <span className="text-6xl block mb-4">🪙</span>
+              <div className="flex justify-center mb-4">
+                <CoinSvg side="heads" size={80} />
+              </div>
               <h2 className="font-display font-black text-4xl text-yellow-400 mb-2">
                 ¡DUPLICASTE!
               </h2>

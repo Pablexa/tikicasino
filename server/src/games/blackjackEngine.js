@@ -42,7 +42,7 @@ export function blackjackBet(state, betAmount, userBalance) {
     return { success: false, error: 'Bet must be greater than 0.' };
   }
   if (betAmount > userBalance) {
-    return { success: false, error: 'Insufficient FCOINS.' };
+    return { success: false, error: 'CALDICOINS insuficientes.' };
   }
 
   // Deal initial cards
@@ -119,7 +119,7 @@ export function blackjackDouble(state, userBalance) {
     return { success: false, error: 'Cannot double down.' };
   }
   if (userBalance < state.bet * 2) {
-    return { success: false, error: 'Insufficient FCOINS to double down.' };
+    return { success: false, error: 'CALDICOINS insuficientes para doblar.' };
   }
 
   state.bet *= 2;

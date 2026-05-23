@@ -20,6 +20,44 @@ export default function Admin() {
   const [coinsAmount, setCoinsAmount] = useState(500)
   const [globalCoinsAmount, setGlobalCoinsAmount] = useState(1000)
 
+  // Anti-Inspect / DevTools Protection for Admin Panel
+  useEffect(() => {
+    // 1. Disable right-click context menu
+    const handleContextMenu = (e) => e.preventDefault();
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    // 2. Disable F12 and standard inspection shortcuts
+    const handleKeyDown = (e) => {
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
+        (e.ctrlKey && e.key === 'U')
+      ) {
+        e.preventDefault();
+        toast.error('Acceso restringido: Inspección deshabilitada.');
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    // 3. Active DevTools Detection (detects dimension thresholds)
+    const checkDevTools = setInterval(() => {
+      const threshold = 160;
+      const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+      const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+      
+      if (widthThreshold || heightThreshold) {
+        window.location.href = '/lobby';
+        toast.error('DevTools detectado. Redirigiendo...');
+      }
+    }, 800);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+      clearInterval(checkDevTools);
+    };
+  }, []);
+
   useEffect(() => {
     if (!socket) return
 
@@ -93,7 +131,7 @@ export default function Admin() {
 
   const wipeAll = () => {
     if (!socket) return
-    if (window.confirm('⚠️ WIPE TOTAL ⚠️\nEsta acción borrará todas las salas activas y reseteará los saldos de absolutamente todos los jugadores de la base de datos a 1,000 FCOINS.\n¿Estás completamente seguro de proceder?')) {
+    if (window.confirm('⚠️ WIPE TOTAL ⚠️\nEsta acción borrará todas las salas activas y reseteará los saldos de absolutamente todos los jugadores de la base de datos a 1,000 CALDICOINS.\n¿Estás completamente seguro de proceder?')) {
       socket.emit('admin:wipeAll', { password })
     }
   }
@@ -216,11 +254,11 @@ export default function Admin() {
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* Active Users Table */}
+          {/* Registered Users Table */}
           <div className="glass rounded-2xl p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-display font-bold text-lg text-tiki-text flex items-center gap-2">
-                <span>🟢</span> Usuarios Activos ({activeUsers.length})
+                <span>👥</span> Cuentas Registradas ({activeUsers.length})
               </h3>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-tiki-muted font-bold">MONTO ACCIÓN:</span>
@@ -235,12 +273,13 @@ export default function Admin() {
 
             <div className="overflow-x-auto max-h-[400px] overflow-y-auto chat-messages">
               {activeUsers.length === 0 ? (
-                <p className="text-center text-tiki-muted py-8 text-sm italic">Ningún jugador conectado en este momento...</p>
+                <p className="text-center text-tiki-muted py-8 text-sm italic">Ningún jugador registrado...</p>
               ) : (
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="text-tiki-muted border-b border-white/5 uppercase tracking-wider text-[10px]">
                       <th className="pb-2 font-bold">Usuario</th>
+                      <th className="pb-2 font-bold">Estado</th>
                       <th className="pb-2 font-bold">Saldo Actual</th>
                       <th className="pb-2 font-bold text-right">Acciones</th>
                     </tr>
@@ -252,19 +291,30 @@ export default function Admin() {
                           <AvatarSvg name={u.avatar || 'tiki1'} size={24} />
                           <span className="font-semibold text-white">{u.nickname}</span>
                         </td>
+                        <td className="py-3">
+                          {u.isOnline ? (
+                            <span className="inline-flex items-center gap-1 bg-green-500/10 border border-green-500/20 text-green-400 font-bold px-2 py-0.5 rounded text-[10px]">
+                              🟢 Online
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-white/5 border border-white/10 text-tiki-muted font-bold px-2 py-0.5 rounded text-[10px]">
+                              ⚪ Offline
+                            </span>
+                          )}
+                        </td>
                         <td className="py-3 font-mono font-black text-yellow-400">
-                          {u.balance.toLocaleString()} F
+                          {u.balance.toLocaleString()} CALDICOINS
                         </td>
                         <td className="py-3 text-right space-x-1">
                           <button
                             onClick={() => giveCoins(u.id)}
-                            className="bg-green-600/20 text-green-400 hover:bg-green-600/30 font-bold px-2.5 py-1 rounded-lg border border-green-500/20"
+                            className="bg-green-600/20 text-green-400 hover:bg-green-600/30 font-bold px-2.5 py-1 rounded-lg border border-green-500/20 cursor-pointer"
                           >
                             +{coinsAmount}
                           </button>
                           <button
                             onClick={() => takeCoins(u.id)}
-                            className="bg-red-600/20 text-red-400 hover:bg-red-600/30 font-bold px-2.5 py-1 rounded-lg border border-red-500/20"
+                            className="bg-red-600/20 text-red-400 hover:bg-red-600/30 font-bold px-2.5 py-1 rounded-lg border border-red-500/20 cursor-pointer"
                           >
                             -{coinsAmount}
                           </button>

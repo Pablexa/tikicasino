@@ -14,6 +14,13 @@ export function setupLiarsBarSocket(io, socket) {
   socket.on('liarsbar:join', ({ roomCode }) => {
     if (!roomCode) return;
 
+    // Leave other liarsbar rooms to avoid crosstalk
+    for (const r of socket.rooms) {
+      if (r.startsWith('liarsbar:') && r !== `liarsbar:${roomCode}`) {
+        socket.leave(r);
+      }
+    }
+
     if (!waitingPlayers.has(roomCode)) waitingPlayers.set(roomCode, new Map());
     const waiting = waitingPlayers.get(roomCode);
     waiting.set(user.id, socket.id);

@@ -1,30 +1,30 @@
 // TikiCasino - Rate Limiting Middleware
 import rateLimit from 'express-rate-limit';
 
-// General IP rate limiting
+// General IP rate limiting - Relaxed to 10,000 max requests per minute
 export const rateLimitByIp = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
+  windowMs: 60 * 1000, 
+  max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
   keyGenerator: (req) => req.ip,
 });
 
-// Strict rate limiting for auth endpoints
+// Strict rate limiting for auth endpoints - Relaxed to 1,000 max requests per minute
 export const authRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,
+  windowMs: 60 * 1000, 
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again later.' },
   keyGenerator: (req) => req.ip,
 });
 
-// Registration rate limiting
+// Registration rate limiting - Relaxed to 1,000 max registrations per minute
 export const registerRateLimit = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  max: 3, // max 3 registrations per IP per day
+  windowMs: 60 * 1000, 
+  max: 1000, 
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many accounts created from this IP. Please try again tomorrow.' },

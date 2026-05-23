@@ -14,7 +14,7 @@ export function playCoinflip(choice, betAmount, userBalance) {
     return { success: false, error: 'Bet must be greater than 0.' };
   }
   if (betAmount > userBalance) {
-    return { success: false, error: 'Insufficient FCOINS.' };
+    return { success: false, error: 'CALDICOINS insuficientes.' };
   }
 
   const result = randomInt(0, 1) === 0 ? 'heads' : 'tails';

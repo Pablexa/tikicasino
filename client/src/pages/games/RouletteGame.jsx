@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../hooks/useAuth.jsx'
@@ -178,36 +178,32 @@ export default function RouletteGame() {
                 </span>
               </div>
 
-              <AnimatePresence mode="wait">
-                {spinning ? (
-                  <motion.div key="spin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-12">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
-                      className="w-32 h-32 mx-auto rounded-full border-4 border-emerald-500 border-t-transparent"
-                    />
-                    <p className="mt-4 text-tiki-muted animate-pulse">Girando la Ruleta...</p>
-                  </motion.div>
-                ) : result !== null ? (
-                  <motion.div key="result" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="py-8">
-                    <div className={`w-32 h-32 rounded-full mx-auto flex items-center justify-center text-5xl font-display font-black text-white ${colorClass[getColor(result)]}`}>
-                      {result}
+              <div className="py-6 flex flex-col items-center justify-center">
+                <RouletteWheel winningNumber={result} spinning={spinning} />
+                
+                {result !== null && !spinning && (
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="mt-6 flex flex-col items-center justify-center bg-black/50 border border-white/10 rounded-2xl px-6 py-3"
+                  >
+                    <span className="text-[10px] text-tiki-muted uppercase font-bold tracking-widest block mb-1">Resultado de Ronda</span>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl font-display font-black text-white ${colorClass[getColor(result)]}`}>
+                        {result}
+                      </div>
+                      <span className="text-base font-bold text-white font-mono uppercase">
+                        {getColor(result) === 'red' ? 'Rojo' : getColor(result) === 'green' ? 'Cero' : 'Negro'}
+                        {result !== 0 && ` • ${result % 2 === 0 ? 'Par' : 'Impar'}`}
+                      </span>
                     </div>
-                    <p className="mt-4 text-lg font-semibold" style={{ color: getColor(result) === 'red' ? '#f87171' : getColor(result) === 'green' ? '#34d399' : '#94a3b8' }}>
-                      {getColor(result).toUpperCase()}
-                      {result !== 0 && ` • ${result % 2 === 0 ? 'Even' : 'Odd'}`}
-                      {result !== 0 && ` • ${result <= 18 ? '1-18' : '19-36'}`}
-                    </p>
-                  </motion.div>
-                ) : (
-                  <motion.div key="idle" className="py-12">
-                    <div className="w-32 h-32 rounded-full mx-auto border-4 border-emerald-500/30 flex items-center justify-center">
-                      <span className="text-tiki-muted text-4xl font-display font-black">?</span>
-                    </div>
-                    <p className="mt-4 text-tiki-muted text-sm">Colocá tus apuestas en el tablero</p>
                   </motion.div>
                 )}
-              </AnimatePresence>
+                
+                {result === null && !spinning && (
+                  <p className="mt-4 text-tiki-muted text-xs tracking-wider animate-pulse uppercase">Esperando apuestas...</p>
+                )}
+              </div>
 
               {/* History */}
               {history.length > 0 && (
@@ -279,7 +275,7 @@ export default function RouletteGame() {
                   {activeBets.map((b, i) => (
                     <div key={i} className="flex justify-between text-sm bg-white/5 rounded-lg px-3 py-2">
                       <span className="text-tiki-text">{b.type}{b.value !== null ? ` (${b.value})` : ''}</span>
-                      <span className="text-yellow-400 font-mono">{b.amount.toLocaleString()} F</span>
+                      <span className="text-yellow-400 font-mono">{b.amount.toLocaleString()} C</span>
                     </div>
                   ))}
                   <div className="flex gap-2 pt-2">
@@ -319,6 +315,204 @@ export default function RouletteGame() {
           </div>
         </div>
       </main>
+    </div>
+  )
+}
+
+function RouletteWheel({ winningNumber, spinning }) {
+  const canvasRef = useRef(null)
+  const animationFrameRef = useRef(null)
+  const angleRef = useRef(0)
+  const ballAngleRef = useRef(0)
+  const ballRadiusRef = useRef(95)
+
+  const WHEEL_NUMBERS = [
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23,
+    10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+  ]
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    const width = canvas.width
+    const height = canvas.height
+    const cx = width / 2
+    const cy = height / 2
+
+    let active = true
+
+    const render = () => {
+      if (!active) return
+
+      // Spin physics
+      if (spinning) {
+        angleRef.current += 0.04
+        ballAngleRef.current -= 0.07
+        ballRadiusRef.current = 114 + Math.sin(Date.now() / 80) * 1.5 // realistic outer track wobble
+      } else if (winningNumber !== null) {
+        // Settle ball into target slot index
+        const targetIdx = WHEEL_NUMBERS.indexOf(winningNumber)
+        const targetSlotAngle = (targetIdx * 2 * Math.PI) / 37
+        
+        // Slow down wheel rotation slightly
+        angleRef.current += 0.015
+        
+        // Lock ball to target slot so it rotates solidly WITH the wheel (angleRef.current + targetSlotAngle)
+        const targetBallAngle = angleRef.current + targetSlotAngle
+        
+        // Handle angle interpolation taking the shortest path
+        let angleDiff = targetBallAngle - ballAngleRef.current
+        // Normalize angle difference to [-PI, PI] for shortest rotation path
+        angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff))
+        
+        ballAngleRef.current += angleDiff * 0.12
+        
+        // Settle into the pocket slot just below the numbers (82px)
+        const radDiff = 82 - ballRadiusRef.current
+        ballRadiusRef.current += radDiff * 0.12
+      } else {
+        // Idle slow rotation
+        angleRef.current += 0.003
+        ballAngleRef.current = 0
+        ballRadiusRef.current = 0 // hidden
+      }
+
+      // Draw Wheel
+      ctx.clearRect(0, 0, width, height)
+
+      // 1. Mahogany wood outer ring
+      const outerGrad = ctx.createRadialGradient(cx, cy, 122, cx, cy, 152)
+      outerGrad.addColorStop(0, '#2e1005')
+      outerGrad.addColorStop(0.5, '#5c220f')
+      outerGrad.addColorStop(1, '#1c0803')
+      ctx.fillStyle = outerGrad
+      ctx.beginPath()
+      ctx.arc(cx, cy, 152, 0, Math.PI * 2)
+      ctx.fill()
+
+      // 2. Brass rim separator
+      ctx.strokeStyle = '#d97706'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.arc(cx, cy, 128, 0, Math.PI * 2)
+      ctx.stroke()
+
+      // 3. Black felt inner background
+      ctx.fillStyle = '#0f172a'
+      ctx.beginPath()
+      ctx.arc(cx, cy, 124, 0, Math.PI * 2)
+      ctx.fill()
+
+      // 4. Slots (37 wedges)
+      const wedgeAngle = (2 * Math.PI) / 37
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(angleRef.current)
+
+      const RED_NUMS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+
+      for (let i = 0; i < 37; i++) {
+        const num = WHEEL_NUMBERS[i]
+        const col = num === 0 ? '#059669' : RED_NUMS.includes(num) ? '#dc2626' : '#1e293b'
+        
+        ctx.fillStyle = col
+        ctx.beginPath()
+        ctx.moveTo(0, 0)
+        ctx.arc(0, 0, 120, i * wedgeAngle - wedgeAngle / 2, i * wedgeAngle + wedgeAngle / 2)
+        ctx.closePath()
+        ctx.fill()
+
+        // Subtle separator lines
+        ctx.strokeStyle = 'rgba(217, 119, 6, 0.25)'
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(0, 0)
+        ctx.lineTo(Math.cos(i * wedgeAngle - wedgeAngle/2) * 120, Math.sin(i * wedgeAngle - wedgeAngle/2) * 120)
+        ctx.stroke()
+
+        // Numbers text
+        ctx.save()
+        ctx.rotate(i * wedgeAngle)
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 10px Arial'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(num.toString(), 0, -104)
+        ctx.restore()
+      }
+      ctx.restore()
+
+      // 5. Central brass turret
+      const turretGrad = ctx.createRadialGradient(cx, cy, 5, cx, cy, 36)
+      turretGrad.addColorStop(0, '#fef08a')
+      turretGrad.addColorStop(0.5, '#eab308')
+      turretGrad.addColorStop(1, '#854d0e')
+      ctx.fillStyle = turretGrad
+      ctx.beginPath()
+      ctx.arc(cx, cy, 36, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Gold ring around turret
+      ctx.strokeStyle = '#d97706'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(cx, cy, 36, 0, Math.PI * 2)
+      ctx.stroke()
+      
+      // Turret handles (four metallic pins)
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(-angleRef.current * 1.5)
+      ctx.fillStyle = '#fef08a'
+      ctx.strokeStyle = '#ca8a04'
+      ctx.lineWidth = 2
+      for (let h = 0; h < 4; h++) {
+        ctx.rotate(Math.PI / 2)
+        ctx.beginPath()
+        ctx.arc(0, -22, 4, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(0, 0)
+        ctx.lineTo(0, -22)
+        ctx.stroke()
+      }
+      ctx.restore()
+
+      // 6. Draw Ball
+      if (ballRadiusRef.current > 0) {
+        const ballX = cx + Math.cos(ballAngleRef.current) * ballRadiusRef.current
+        const ballY = cy + Math.sin(ballAngleRef.current) * ballRadiusRef.current
+
+        // Shiny white/silver ball with heavy cyan glow
+        ctx.save()
+        ctx.shadowColor = '#22d3ee'
+        ctx.shadowBlur = 12
+        const ballGrad = ctx.createRadialGradient(ballX - 2, ballY - 2, 1, ballX, ballY, 5)
+        ballGrad.addColorStop(0, '#ffffff')
+        ballGrad.addColorStop(1, '#94a3b8')
+        ctx.fillStyle = ballGrad
+        ctx.beginPath()
+        ctx.arc(ballX, ballY, 5, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.restore()
+      }
+
+      animationFrameRef.current = requestAnimationFrame(render)
+    }
+
+    render()
+
+    return () => {
+      active = false
+      cancelAnimationFrame(animationFrameRef.current)
+    }
+  }, [spinning, winningNumber])
+
+  return (
+    <div className="relative w-[340px] h-[340px] mx-auto bg-black/60 rounded-full border border-white/5 shadow-2xl flex items-center justify-center p-2">
+      <canvas ref={canvasRef} width={340} height={340} className="w-full h-full block rounded-full" />
     </div>
   )
 }

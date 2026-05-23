@@ -11,6 +11,14 @@ if (!process.env.DATABASE_URL) {
   const dbPath = path.join(__dirname, '../../prisma/dev.db');
   process.env.DATABASE_URL = `file:${dbPath}`;
   console.log(`Using SQLite database at: ${dbPath}`);
+} else if (process.env.DATABASE_URL.startsWith('file:')) {
+  // Normalize relative SQLite path to absolute path
+  const relativePath = process.env.DATABASE_URL.replace('file:', '');
+  if (!path.isAbsolute(relativePath)) {
+    const absolutePath = path.resolve(__dirname, '../../', relativePath);
+    process.env.DATABASE_URL = `file:${absolutePath}`;
+    console.log(`[Prisma Client] SQLite URL normalizada a absoluta: ${absolutePath}`);
+  }
 }
 
 const globalForPrisma = globalThis;

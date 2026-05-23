@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     rootDir: .
-    buildCommand: "cd client && npm install && npm run build && cd ../server && npm install && npx prisma generate"
+    buildCommand: "cd client && npm install && npm run build && cd ../server && npm install && node prisma/prepare.js && npx prisma generate"
     startCommand: "cd server && npm start"
     envVars:
       - key: NODE_ENV

@@ -148,7 +148,7 @@ export class CrashEngine {
       return { success: false, error: 'Bet must be greater than 0.' };
     }
     if (amount > userBalance) {
-      return { success: false, error: 'Insufficient FCOINS.' };
+      return { success: false, error: 'CALDICOINS insuficientes.' };
     }
     if (this.bets.has(userId)) {
       return { success: false, error: 'You already placed a bet this round.' };

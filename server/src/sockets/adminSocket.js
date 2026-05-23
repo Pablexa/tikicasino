@@ -16,12 +16,18 @@ export function setupAdminSocket(io, socket) {
     }
 
     try {
-      // Fetch active users details
-      const activeUserIds = Array.from(userSockets.keys());
-      const activeUsers = await prisma.user.findMany({
-        where: { id: { in: activeUserIds } },
-        select: { id: true, nickname: true, avatar: true, balance: true }
+      // Fetch all registered users
+      const allUsers = await prisma.user.findMany({
+        select: { id: true, nickname: true, avatar: true, balance: true },
+        orderBy: { nickname: 'asc' }
       });
+
+      // Map online status
+      const activeUserIds = new Set(userSockets.keys());
+      const activeUsers = allUsers.map(u => ({
+        ...u,
+        isOnline: activeUserIds.has(u.id)
+      }));
 
       // Fetch active rooms
       const activeRooms = await prisma.room.findMany({
@@ -191,7 +197,7 @@ export function setupAdminSocket(io, socket) {
         io.to(socketId).emit('balance:update', { balance: 1000 });
       }
 
-      socket.emit('admin:action:success', { message: 'Plataforma reseteada completamente (Saldos a 1,000 F).' });
+      socket.emit('admin:action:success', { message: 'Plataforma reseteada completamente (Saldos a 1,000 CALDICOINS).' });
       socket.emit('admin:data:refresh');
     } catch (err) {
       socket.emit('admin:error', { message: 'Error al realizar el wipe.' });

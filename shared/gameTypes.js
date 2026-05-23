@@ -98,6 +98,12 @@ export const GAME_CONFIGS = {
     maxBet: 10000,
     description: 'Roll the dice, predict higher or lower',
   },
+  chess: {
+    name: 'Ajedrez',
+    minBet: 10,
+    maxBet: 100000,
+    description: 'Duelo mental por CALDICOINS en tablero de caoba',
+  },
 };
 
 // Roulette number colors (European roulette)

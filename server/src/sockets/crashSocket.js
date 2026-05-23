@@ -8,19 +8,20 @@ import { broadcastSystemMessage } from './chatSocket.js';
  * Get or create a crash engine for a room
  */
 function getOrCreateCrashEngine(io, roomCode, roomId) {
-  if (crashEngines.has(roomCode)) {
-    return crashEngines.get(roomCode);
+  const code = roomCode.toUpperCase();
+  if (crashEngines.has(code)) {
+    return crashEngines.get(code);
   }
 
   const engine = new CrashEngine(
-    roomCode,
+    code,
     // onTick
     (data) => {
-      io.to(`room:${roomCode}`).emit('crash:tick', data);
+      io.to(`room:${code}`).emit('crash:tick', data);
     },
     // onCrash
     async (data) => {
-      io.to(`room:${roomCode}`).emit('crash:roundCrash', {
+      io.to(`room:${code}`).emit('crash:roundCrash', {
         roundId: data.roundId,
         crashPoint: data.crashPoint,
         history: data.history,
@@ -33,7 +34,7 @@ function getOrCreateCrashEngine(io, roomCode, roomId) {
           await emitBalanceUpdate(io, result.userId);
 
           // Broadcast lose result to the room feed!
-          io.to(`room:${roomCode}`).emit('room:game:result', {
+          io.to(`room:${code}`).emit('room:game:result', {
             userId: result.userId,
             nickname: result.nickname || 'Jugador',
             avatar: result.avatar || 'tiki1',
@@ -46,17 +47,17 @@ function getOrCreateCrashEngine(io, roomCode, roomId) {
         }
       }
 
-      await broadcastSystemMessage(io, roomCode, roomId,
+      await broadcastSystemMessage(io, code, roomId,
         `¡Crash! El cohete explotó en ${data.crashPoint.toFixed(2)}x`).catch(() => {});
     },
     // onRoundStart
     (data) => {
-      io.to(`room:${roomCode}`).emit('crash:roundStart', data);
+      io.to(`room:${code}`).emit('crash:roundStart', data);
     }
   );
 
   engine.start();
-  crashEngines.set(roomCode, engine);
+  crashEngines.set(code, engine);
   return engine;
 }
 
@@ -66,11 +67,12 @@ export function setupCrashSocket(io, socket) {
   socket.on('crash:join', async ({ roomCode }) => {
     try {
       if (!roomCode) return;
-      const room = await prisma.room.findUnique({ where: { code: roomCode.toUpperCase() } });
+      const code = roomCode.toUpperCase();
+      const room = await prisma.room.findUnique({ where: { code } });
       if (!room) return;
 
-      socket.join(`room:${roomCode}`); // JOIN room channel to receive live ticks!
-      const engine = getOrCreateCrashEngine(io, roomCode, room.id);
+      socket.join(`room:${code}`); // JOIN room channel to receive live ticks!
+      const engine = getOrCreateCrashEngine(io, code, room.id);
       socket.emit('crash:state', engine.getState());
     } catch (err) {
       console.error('crash:join error:', err);
@@ -83,14 +85,15 @@ export function setupCrashSocket(io, socket) {
       if (!roomCode || !bet || bet <= 0) {
         socket.emit('crash:error', { message: 'Apuesta inválida.' }); return;
       }
-      const room = await prisma.room.findUnique({ where: { code: roomCode.toUpperCase() } });
+      const code = roomCode.toUpperCase();
+      const room = await prisma.room.findUnique({ where: { code } });
       if (!room) return;
       const freshUser = await prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } });
       if (freshUser.balance < bet) {
         socket.emit('crash:error', { message: 'CALDICOINS insuficientes.' }); return;
       }
 
-      const engine = getOrCreateCrashEngine(io, roomCode, room.id);
+      const engine = getOrCreateCrashEngine(io, code, room.id);
       const result = engine.placeBet(user.id, bet, freshUser.balance, user.nickname, user.avatar);
 
       if (!result.success) {
@@ -119,7 +122,7 @@ export function setupCrashSocket(io, socket) {
       socket.emit('crash:betPlaced', { amount: bet, balance: updatedUser.balance });
 
       // Broadcast active bet to the room feed!
-      io.to(`room:${roomCode}`).emit('room:game:bet', {
+      io.to(`room:${code}`).emit('room:game:bet', {
         userId: user.id,
         nickname: user.nickname,
         avatar: user.avatar,
@@ -134,10 +137,12 @@ export function setupCrashSocket(io, socket) {
 
   socket.on('crash:cashout', async ({ roomCode }) => {
     try {
-      const room = await prisma.room.findUnique({ where: { code: roomCode?.toUpperCase() } });
+      if (!roomCode) return;
+      const code = roomCode.toUpperCase();
+      const room = await prisma.room.findUnique({ where: { code } });
       if (!room) return;
 
-      const engine = crashEngines.get(roomCode);
+      const engine = crashEngines.get(code);
       if (!engine) return;
 
       const result = engine.cashout(user.id);
@@ -174,7 +179,7 @@ export function setupCrashSocket(io, socket) {
         balance: updatedUser.balance,
       });
 
-      io.to(`room:${roomCode}`).emit('crash:playerCashedOut', {
+      io.to(`room:${code}`).emit('crash:playerCashedOut', {
         userId: user.id,
         nickname: user.nickname,
         cashoutMultiplier: result.cashoutMultiplier,
@@ -182,7 +187,7 @@ export function setupCrashSocket(io, socket) {
       });
 
       // Broadcast cashout success to the room feed!
-      io.to(`room:${roomCode}`).emit('room:game:result', {
+      io.to(`room:${code}`).emit('room:game:result', {
         userId: user.id,
         nickname: user.nickname,
         avatar: user.avatar,

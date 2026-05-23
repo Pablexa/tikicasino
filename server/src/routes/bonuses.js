@@ -1,5 +1,5 @@
 // TikiCasino - Bonuses Routes
-// FCOINS are fictional points. No real money involved.
+// CALDICOINS are fictional points. No real money involved.
 import { Router } from 'express';
 import { prisma } from '../db/client.js';
 import { requireAuth, requireVerifiedEmail } from '../middleware/auth.js';
@@ -68,7 +68,7 @@ bonusesRouter.post('/daily', requireAuth, requireVerifiedEmail, async (req, res)
     ]);
 
     res.json({
-      message: `Daily bonus claimed! +${bonusAmount.toLocaleString()} FCOINS`,
+      message: `Daily bonus claimed! +${bonusAmount.toLocaleString()} CALDICOINS`,
       amount: bonusAmount,
       streak: newStreak,
       nextClaimAt: new Date(Date.now() + DAILY_BONUS_COOLDOWN_MS).toISOString(),
@@ -86,7 +86,7 @@ bonusesRouter.post('/emergency-refill', requireAuth, requireVerifiedEmail, async
 
     if (user.balance >= EMERGENCY_REFILL_THRESHOLD) {
       return res.status(400).json({
-        error: `Emergency refill is only available when your balance is below ${EMERGENCY_REFILL_THRESHOLD} FCOINS.`,
+        error: `Emergency refill is only available when your balance is below ${EMERGENCY_REFILL_THRESHOLD} CALDICOINS.`,
         currentBalance: user.balance,
       });
     }
@@ -124,7 +124,7 @@ bonusesRouter.post('/emergency-refill', requireAuth, requireVerifiedEmail, async
     ]);
 
     res.json({
-      message: `Emergency refill applied! +${EMERGENCY_REFILL_AMOUNT.toLocaleString()} FCOINS`,
+      message: `Emergency refill applied! +${EMERGENCY_REFILL_AMOUNT.toLocaleString()} CALDICOINS`,
       amount: EMERGENCY_REFILL_AMOUNT,
       nextClaimAt: new Date(Date.now() + EMERGENCY_REFILL_COOLDOWN_MS).toISOString(),
     });

@@ -51,11 +51,11 @@ export async function sendVerificationEmail(email, token) {
           </div>
           
           <h2 style="color: #ffffff; font-size: 20px;">Verify your email address</h2>
-          <p style="color: #9ca3af;">Click the button below to verify your email and claim your 10,000 FCOINS welcome bonus.</p>
+          <p style="color: #9ca3af;">Click the button below to verify your email and claim your 10,000 CALDICOINS welcome bonus.</p>
           
           <div style="text-align: center; margin: 32px 0;">
             <a href="${verifyUrl}" style="background: linear-gradient(135deg, #22d3ee, #a855f7); color: white; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">
-              Verify Email & Get 10,000 FCOINS
+              Verify Email & Get 10,000 CALDICOINS
             </a>
           </div>
           
@@ -64,7 +64,7 @@ export async function sendVerificationEmail(email, token) {
           
           <div style="border-top: 1px solid #1f1f1f; margin-top: 32px; padding-top: 24px;">
             <p style="color: #4b5563; font-size: 12px; text-align: center;">
-              ⚠️ TikiCasino is a fake casino simulator. FCOINS have no real value. 
+              ⚠️ TikiCasino is a fake casino simulator. CALDICOINS have no real value. 
               No real money, crypto, deposits or withdrawals are supported.
             </p>
           </div>

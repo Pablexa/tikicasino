@@ -5,9 +5,9 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon --experimental-vm-modules src/index.js",
-    "start": "npx prisma db push --accept-data-loss && node src/index.js",
-    "build": "npx prisma generate",
+    "dev": "node prisma/prepare.js && nodemon --experimental-vm-modules src/index.js",
+    "start": "node prisma/prepare.js && npx prisma db push --accept-data-loss && node src/index.js",
+    "build": "node prisma/prepare.js && npx prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio"
@@ -15,6 +15,7 @@
   "dependencies": {
     "@prisma/client": "^5.9.1",
     "bcryptjs": "^2.4.3",
+    "chess.js": "^1.4.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",

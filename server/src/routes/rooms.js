@@ -19,9 +19,31 @@ function generateRoomCode() {
   return code;
 }
 
+roomsRouter.get('/active', requireAuth, async (req, res) => {
+  try {
+    const rooms = await prisma.room.findMany({
+      where: { isActive: true },
+      include: {
+        owner: { select: { id: true, nickname: true, avatar: true } },
+        members: {
+          where: { isKicked: false },
+          include: {
+            user: { select: { id: true, nickname: true, avatar: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ rooms: rooms.map(formatRoom) });
+  } catch (err) {
+    console.error('Get active rooms error:', err);
+    res.status(500).json({ error: 'Error al obtener salas activas.' });
+  }
+});
+
 roomsRouter.post('/create', requireAuth, async (req, res) => {
   try {
-    const { name, settings } = req.body;
+    const { name, settings, customCode } = req.body;
 
     const io = req.app.get('io');
     try {
@@ -30,10 +52,14 @@ roomsRouter.post('/create', requireAuth, async (req, res) => {
         select: { id: true, code: true }
       });
       for (const r of ownedRooms) {
-        await deleteRoom(io, r.id, r.code);
+        // Simply update room timestamp to reset empty timer on owner creating new room, keep old rooms alive!
+        await prisma.room.update({
+          where: { id: r.id },
+          data: { updatedAt: new Date() }
+        });
       }
     } catch (err) {
-      console.error('Error auto-deleting old owned rooms on creation:', err);
+      console.error('Error updating old owned rooms on creation:', err);
     }
 
     if (!name || name.trim().length < 3 || name.trim().length > 30) {
@@ -41,13 +67,25 @@ roomsRouter.post('/create', requireAuth, async (req, res) => {
     }
 
     let code;
-    let attempts = 0;
-    do {
-      code = generateRoomCode();
-      const existing = await prisma.room.findUnique({ where: { code } });
-      if (!existing) break;
-      attempts++;
-    } while (attempts < 10);
+    if (customCode && customCode.trim()) {
+      const codeStr = customCode.trim().toUpperCase();
+      if (!/^[A-Z0-9]{3,6}$/.test(codeStr)) {
+        return res.status(400).json({ error: 'El código debe tener de 3 a 6 caracteres alfanuméricos.' });
+      }
+      const existing = await prisma.room.findUnique({ where: { code: codeStr } });
+      if (existing) {
+        return res.status(400).json({ error: 'El código personalizado ya está ocupado.' });
+      }
+      code = codeStr;
+    } else {
+      let attempts = 0;
+      do {
+        code = generateRoomCode();
+        const existing = await prisma.room.findUnique({ where: { code } });
+        if (!existing) break;
+        attempts++;
+      } while (attempts < 10);
+    }
 
     const defaultSettings = {
       minBet: 10,

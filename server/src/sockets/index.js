@@ -7,7 +7,10 @@ import { setupChatSocket } from './chatSocket.js';
 import { setupCrashSocket } from './crashSocket.js';
 import { setupTexasHoldemSocket } from './texasHoldemSocket.js';
 import { setupLiarsBarSocket } from './liarsBarSocket.js';
+import { setupChessSocket } from './chessSocket.js';
 import { setupAdminSocket } from './adminSocket.js';
+import { setupTriviaSocket } from './triviaSocket.js';
+import { setupShooterSocket } from './shooterSocket.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tikicasino-dev-secret';
 
@@ -91,7 +94,10 @@ export function setupSocketHandlers(io) {
     setupCrashSocket(io, socket);
     setupTexasHoldemSocket(io, socket);
     setupLiarsBarSocket(io, socket);
+    setupChessSocket(io, socket);
     setupAdminSocket(io, socket);
+    setupTriviaSocket(io, socket);
+    setupShooterSocket(io, socket);
 
     // Disconnect handler
     socket.on('disconnect', async () => {
@@ -112,29 +118,33 @@ export function setupSocketHandlers(io) {
         }
       }
 
-      // If this user is the owner/host of any room, delete those rooms immediately
+      // Keep room hosted even if owner leaves/disconnects, letting background 10 min grace cleaner handle it
       try {
         const ownedRooms = await prisma.room.findMany({
           where: { ownerId: user.id },
           select: { id: true, code: true }
         });
         for (const r of ownedRooms) {
-          await deleteRoom(io, r.id, r.code);
+          // Simply update room timestamp to reset empty timer on disconnect
+          await prisma.room.update({
+            where: { id: r.id },
+            data: { updatedAt: new Date() }
+          });
         }
       } catch (err) {
-        console.error('Error deleting owned rooms on disconnect:', err);
+        console.error('Error updating owned rooms on disconnect:', err);
       }
     });
   });
 
   // ── PERIODIC INACTIVE / EMPTY ROOM CLEANER ────────────────
-  // Runs every 2 minutes to scan and auto-delete rooms empty for > 5 min or inactive for > 3 hours
+  // Runs every 2 minutes to scan and auto-delete rooms empty for > 10 min or inactive for > 3 hours
   setInterval(async () => {
     try {
       const rooms = await prisma.room.findMany();
       const now = Date.now();
       const THREE_HOURS = 3 * 60 * 60 * 1000;
-      const EMPTY_GRACE_PERIOD = 5 * 60 * 1000; // 5 minutes empty grace period
+      const EMPTY_GRACE_PERIOD = 10 * 60 * 1000; // 10 minutes empty grace period
 
       for (const room of rooms) {
         const online = roomUsers.get(room.code);

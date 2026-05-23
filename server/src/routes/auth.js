@@ -85,7 +85,7 @@ authRouter.post('/register', registerRateLimit, authRateLimit, async (req, res) 
     setAuthCookie(res, token);
 
     res.status(201).json({
-      message: `¡Cuenta creada! Recibiste ${INITIAL_BONUS.toLocaleString()} FCOINS de bienvenida.`,
+      message: `¡Cuenta creada! Recibiste ${INITIAL_BONUS.toLocaleString()} CALDICOINS de bienvenida.`,
       user,
     });
   } catch (err) {
