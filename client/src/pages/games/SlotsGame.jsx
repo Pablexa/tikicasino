@@ -5,8 +5,9 @@ import { useAuth } from '../../hooks/useAuth.jsx'
 import { useSocket } from '../../hooks/useSocket.jsx'
 import Navbar from '../../components/Navbar.jsx'
 import BalanceBadge from '../../components/BalanceBadge.jsx'
-import ChatPanel from '../../components/ChatPanel.jsx'
+import RightSidebar from '../../components/RightSidebar.jsx'
 import toast from 'react-hot-toast'
+import { playWinSound, playLoseSound } from '../../utils/audio.js'
 
 const SYMBOL_SVG = {
   cherry: (
@@ -63,10 +64,10 @@ function SlotReel({ symbols, spinning, delay = 0 }) {
     <div className="flex flex-col gap-2 items-center">
       {symbols.map((sym, i) => (
         <motion.div
-          key={`${sym}-${i}`}
-          initial={spinning ? { y: -20, opacity: 0 } : false}
+          key={i}
+          initial={spinning ? { y: -20, opacity: 0.8 } : false}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: delay + i * 0.05, duration: 0.3 }}
+          transition={{ delay: delay + i * 0.05, duration: 0.25 }}
           className={`w-16 h-16 rounded-xl flex items-center justify-center ${
             i === 1 ? 'bg-white/10 border-2 border-yellow-500/30' : 'bg-white/5'
           }`}
@@ -92,6 +93,7 @@ export default function SlotsGame() {
   ])
   const [lastResult, setLastResult] = useState(null)
   const [jackpotAlert, setJackpotAlert] = useState(false)
+  const [showReward, setShowReward] = useState(false)
 
   useEffect(() => { setBalance(user?.balance || 0) }, [user?.balance])
 
@@ -120,12 +122,16 @@ export default function SlotsGame() {
         setLastResult(result)
         setGirarning(false)
         if (result.isJackpot) {
+          playWinSound()
           setJackpotAlert(true)
-          setTimeout(() => setJackpotAlert(false), 4000)
+          setTimeout(() => setJackpotAlert(false), 5000)
           toast.success(`¡JACKPOT!! +${result.payout.toLocaleString()} CALDICOINS!`)
         } else if (result.isWin) {
+          playWinSound()
+          setShowReward(true)
           toast.success(`¡Ganaste! +${result.payout.toLocaleString()} CALDICOINS`)
         } else {
+          playLoseSound()
           toast.error('No ganaste esta vez. ¡Volvé a girar!')
         }
       }, 1200)
@@ -133,6 +139,7 @@ export default function SlotsGame() {
     const onError = ({ message }) => { toast.error(message); setGirarning(false) }
     const onSaldoUpdate = ({ balance: b }) => { setBalance(b); updateBalance(b) }
     const onJackpot = ({ nickname, payout }) => {
+      playWinSound()
       toast.success(`${nickname} hit the ¡JACKPOT! for ${payout.toLocaleString()} CALDICOINS!`, { duration: 6000 })
     }
 
@@ -183,7 +190,7 @@ export default function SlotsGame() {
             >
               <div className="glass-heavy rounded-3xl px-12 py-6 border border-yellow-500/50 shadow-gold-glow">
                 <p className="font-display font-black text-5xl neon-gold mb-2">¡JACKPOT!!</p>
-                <p className="text-yellow-400 text-xl">You hit the big one!</p>
+                <p className="text-yellow-400 text-xl">¡Acabás de reventar el tragamonedas!</p>
               </div>
             </motion.div>
           )}
@@ -203,7 +210,7 @@ export default function SlotsGame() {
               {/* Reels */}
               <div className="flex justify-center gap-3 mb-6 relative z-10">
                 {grid.map((reel, i) => (
-                  <SlotReel key={i} symbols={reel} spinning={spinning} delay={i * 0.1} />
+                  <SlotReel key={i} symbols={reel} spinning={spinning} delay={i * 0.08} />
                 ))}
               </div>
 
@@ -256,11 +263,11 @@ export default function SlotsGame() {
                   <button
                     onClick={spin}
                     disabled={spinning || betAmount < 10 || betAmount > balance}
-                    className="btn-gold py-3 px-8 text-base font-black"
+                    className="btn-gold py-3 px-8 text-base font-black flex items-center justify-center min-w-[120px]"
                   >
                     {spinning ? (
                       <motion.span animate={{ rotate: 360 }} transition={{ duration: 0.5, repeat: Infinity }}>◈</motion.span>
-                    ) : 'SPIN'}
+                    ) : 'GIRAR 🎰'}
                   </button>
                 </div>
               </div>
@@ -283,12 +290,78 @@ export default function SlotsGame() {
             </div>
           </div>
 
-          {/* Chat */}
-          <div className="h-[600px]">
-            <ChatPanel roomCode={roomCode} />
+          {/* Right Sidebar - Sliding chat & active bets panel */}
+          <div className="h-[580px] lg:col-span-1">
+            <RightSidebar roomCode={roomCode} />
           </div>
         </div>
       </main>
+
+      {/* custom reward celebration modal */}
+      <AnimatePresence>
+        {showReward && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.8, rotate: -3 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0.8, rotate: 3 }}
+              className="glass max-w-md w-full p-8 rounded-3xl border border-yellow-500/30 text-center relative overflow-hidden shadow-[0_0_80px_rgba(251,191,36,0.2)] mx-4"
+            >
+              {/* Confetti particles */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {[...Array(24)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute w-2 h-2 rounded-full"
+                    style={{
+                      left: `${Math.random() * 100}%`,
+                      top: `-5%`,
+                      backgroundColor: ['#fbbf24', '#22d3ee', '#10b981', '#a78bfa'][i % 4]
+                    }}
+                    animate={{
+                      y: ['0%', '1100%'],
+                      x: [`0px`, `${Math.sin(i) * 60}px`],
+                      rotate: [0, 360]
+                    }}
+                    transition={{
+                      duration: 2 + Math.random() * 2,
+                      repeat: Infinity,
+                      delay: Math.random() * 1.5
+                    }}
+                  />
+                ))}
+              </div>
+
+              <span className="text-6xl block mb-4">🎉</span>
+              <h2 className="font-display font-black text-4xl text-yellow-400 mb-2">
+                ¡GANASTE!
+              </h2>
+              <p className="text-tiki-muted text-xs mb-6">Felicidades, lograste una gran combinación.</p>
+              
+              <div className="bg-white/5 border border-white/10 p-5 rounded-2xl mb-6">
+                <span className="text-[10px] text-tiki-muted uppercase font-bold tracking-wider block mb-1">
+                  Premio Total
+                </span>
+                <span className="text-3xl font-mono font-black text-yellow-400 block">
+                  +{lastResult?.payout?.toLocaleString()} CALDICOINS
+                </span>
+              </div>
+
+              <button
+                onClick={() => setShowReward(false)}
+                className="btn-primary w-full py-3.5 justify-center font-black text-base shadow-[0_0_30px_rgba(251,191,36,0.3)]"
+              >
+                ¡SEGUIR JUGANDO! 🎰
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

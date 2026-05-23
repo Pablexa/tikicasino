@@ -6,22 +6,20 @@ const SocketContext = createContext(null)
 
 export function SocketProvider({ children }) {
   const { user } = useAuth()
-  const socketRef = useRef(null)
+  const [socket, setSocket] = useState(null)
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
     if (!user) {
-      if (socketRef.current) {
-        socketRef.current.disconnect()
-        socketRef.current = null
+      if (socket) {
+        socket.disconnect()
+        setSocket(null)
         setConnected(false)
       }
       return
     }
 
-    if (socketRef.current?.connected) return
-
-    const socket = io('/', {
+    const newSocket = io('/', {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -29,30 +27,30 @@ export function SocketProvider({ children }) {
       reconnectionDelay: 1000,
     })
 
-    socket.on('connect', () => {
+    newSocket.on('connect', () => {
       setConnected(true)
-      console.log('Socket connected:', socket.id)
+      console.log('Socket connected:', newSocket.id)
     })
 
-    socket.on('disconnect', () => {
+    newSocket.on('disconnect', () => {
       setConnected(false)
     })
 
-    socket.on('connect_error', (err) => {
+    newSocket.on('connect_error', (err) => {
       console.warn('Socket connect error:', err.message)
     })
 
-    socketRef.current = socket
+    setSocket(newSocket)
 
     return () => {
-      socket.disconnect()
-      socketRef.current = null
+      newSocket.disconnect()
+      setSocket(null)
       setConnected(false)
     }
   }, [user])
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, connected }}>
+    <SocketContext.Provider value={{ socket, connected }}>
       {children}
     </SocketContext.Provider>
   )

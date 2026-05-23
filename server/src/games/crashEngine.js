@@ -99,6 +99,8 @@ export class CrashEngine {
           cashoutMultiplier: null,
           payout: 0,
           profit: -bet.amount,
+          nickname: bet.nickname,
+          avatar: bet.avatar,
         });
       } else {
         results.push({
@@ -108,6 +110,8 @@ export class CrashEngine {
           cashoutMultiplier: bet.cashoutMultiplier,
           payout: bet.payout,
           profit: bet.payout - bet.amount,
+          nickname: bet.nickname,
+          avatar: bet.avatar,
         });
       }
     }
@@ -136,7 +140,7 @@ export class CrashEngine {
   /**
    * Place a bet for a user
    */
-  placeBet(userId, amount, userBalance) {
+  placeBet(userId, amount, userBalance, nickname = 'Jugador', avatar = 'tiki1') {
     if (this.phase !== 'betting') {
       return { success: false, error: 'Betting phase has ended.' };
     }
@@ -155,6 +159,8 @@ export class CrashEngine {
       cashedOut: false,
       cashoutMultiplier: null,
       payout: 0,
+      nickname,
+      avatar,
     });
 
     return { success: true, amount };

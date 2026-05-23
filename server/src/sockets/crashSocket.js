@@ -26,11 +26,23 @@ function getOrCreateCrashEngine(io, roomCode, roomId) {
         history: data.history,
       });
 
-      // Process payouts for those who didn't cash out
+      // Process payouts for those who didn't cash out and broadcast results
       for (const result of data.results) {
         if (!result.cashedOut && result.amount > 0) {
           // Already deducted, no payout needed
           await emitBalanceUpdate(io, result.userId);
+
+          // Broadcast lose result to the room feed!
+          io.to(`room:${roomCode}`).emit('room:game:result', {
+            userId: result.userId,
+            nickname: result.nickname || 'Jugador',
+            avatar: result.avatar || 'tiki1',
+            gameType: 'crash',
+            betAmount: result.amount,
+            payout: 0,
+            win: false,
+            timestamp: new Date().toISOString()
+          });
         }
       }
 
@@ -79,7 +91,7 @@ export function setupCrashSocket(io, socket) {
       }
 
       const engine = getOrCreateCrashEngine(io, roomCode, room.id);
-      const result = engine.placeBet(user.id, bet, freshUser.balance);
+      const result = engine.placeBet(user.id, bet, freshUser.balance, user.nickname, user.avatar);
 
       if (!result.success) {
         socket.emit('crash:error', { message: result.error });
@@ -105,6 +117,15 @@ export function setupCrashSocket(io, socket) {
       });
 
       socket.emit('crash:betPlaced', { amount: bet, balance: updatedUser.balance });
+
+      // Broadcast active bet to the room feed!
+      io.to(`room:${roomCode}`).emit('room:game:bet', {
+        userId: user.id,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        gameType: 'crash',
+        betAmount: bet
+      });
     } catch (err) {
       console.error('crash:bet error:', err);
       socket.emit('crash:error', { message: 'Error del servidor.' });
@@ -158,6 +179,18 @@ export function setupCrashSocket(io, socket) {
         nickname: user.nickname,
         cashoutMultiplier: result.cashoutMultiplier,
         payout: result.payout,
+      });
+
+      // Broadcast cashout success to the room feed!
+      io.to(`room:${roomCode}`).emit('room:game:result', {
+        userId: user.id,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        gameType: 'crash',
+        betAmount: Math.floor(result.payout / result.cashoutMultiplier),
+        payout: result.payout,
+        win: true,
+        timestamp: new Date().toISOString()
       });
     } catch (err) {
       console.error('crash:cashout error:', err);

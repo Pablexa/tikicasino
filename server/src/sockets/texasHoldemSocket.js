@@ -84,21 +84,8 @@ export function setupTexasHoldemSocket(io, socket) {
 
     broadcast(io, roomCode, result.table);
 
-    // If showdown, settle balances
+    // If showdown, just schedule the next hand broadcast
     if (result.table.phase === 'showdown' && result.table.winners) {
-      for (const winner of result.table.winners) {
-        try {
-          const updated = await prisma.user.update({
-            where: { id: winner.player.id },
-            data: { balance: { increment: winner.player.stack } },
-            select: { balance: true }
-          });
-          io.to(`poker:${roomCode}:${winner.player.id}`).emit('balance:update', {
-            balance: updated.balance
-          });
-        } catch (e) { console.error('Balance settle error:', e); }
-      }
-      // After 6s, next hand state will be broadcast via engine timer
       setTimeout(() => {
         const table = getTable(roomCode);
         if (table) broadcast(io, roomCode, table);
@@ -133,7 +120,36 @@ export function setupTexasHoldemSocket(io, socket) {
   });
 
   socket.on('disconnect', async () => {
-    // Auto-leave all tables
-    // (handled by leaveTable when socket disconnects)
+    // Auto-leave and refund stacks from all active tables on disconnect
+    try {
+      const room = await prisma.room.findFirst({
+        where: { members: { some: { userId: user.id } } }
+      });
+      if (!room) return;
+      const roomCode = room.code;
+      const table = getTable(roomCode);
+      if (!table) return;
+
+      const player = table.players.find(p => p.id === user.id);
+      if (player && player.stack > 0) {
+        // Return remaining stack to database balance
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { balance: { increment: player.stack } },
+        });
+        // Emit balance update to player's active socket if still partially alive
+        const updatedUser = await prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } });
+        socket.emit('balance:update', { balance: updatedUser.balance });
+      }
+      leaveTable(roomCode, user.id);
+      socket.leave(`poker:${roomCode}:${user.id}`);
+      socket.leave(`poker:${roomCode}:spectator`);
+
+      const updatedTable = getTable(roomCode);
+      if (updatedTable) broadcast(io, roomCode, updatedTable);
+      else io.to(`poker:${roomCode}:spectator`).emit('poker:tableClosed');
+    } catch (err) {
+      console.error('Poker disconnect cleanup error:', err);
+    }
   });
 }

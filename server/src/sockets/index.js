@@ -7,6 +7,7 @@ import { setupChatSocket } from './chatSocket.js';
 import { setupCrashSocket } from './crashSocket.js';
 import { setupTexasHoldemSocket } from './texasHoldemSocket.js';
 import { setupLiarsBarSocket } from './liarsBarSocket.js';
+import { setupAdminSocket } from './adminSocket.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tikicasino-dev-secret';
 
@@ -90,6 +91,7 @@ export function setupSocketHandlers(io) {
     setupCrashSocket(io, socket);
     setupTexasHoldemSocket(io, socket);
     setupLiarsBarSocket(io, socket);
+    setupAdminSocket(io, socket);
 
     // Disconnect handler
     socket.on('disconnect', async () => {
