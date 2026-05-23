@@ -299,7 +299,7 @@ export default function Room() {
             {/* Games */}
             <div>
               <h2 className="font-display font-bold text-lg text-tiki-text mb-4">Elegí un juego</h2>
-              <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3">
                 {GAMES.map(game => (
                   <motion.div
                     key={game.id}

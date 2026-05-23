@@ -7,6 +7,9 @@ import {
 
 const BUY_IN = 2000; // CALDICOINS per session
 
+// Global map to hold disconnect timeouts (userId -> timeoutId)
+const pokerDisconnectTimeouts = new Map();
+
 function broadcast(io, roomCode, table, exceptUserId = null) {
   const tableState = table;
   tableState.players.forEach(p => {
@@ -23,6 +26,15 @@ export function setupTexasHoldemSocket(io, socket) {
 
   socket.on('poker:join', async ({ roomCode }) => {
     try {
+      if (!roomCode) return;
+      const code = roomCode.toUpperCase();
+
+      // Clear disconnect timeout if player is returning within grace period
+      if (pokerDisconnectTimeouts.has(user.id)) {
+        clearTimeout(pokerDisconnectTimeouts.get(user.id));
+        pokerDisconnectTimeouts.delete(user.id);
+      }
+
       // Deduct buy-in from balance
       const dbUser = await prisma.user.findUnique({
         where: { id: user.id }, select: { balance: true }
@@ -30,11 +42,11 @@ export function setupTexasHoldemSocket(io, socket) {
       if (!dbUser) return socket.emit('poker:error', { message: 'Usuario no encontrado.' });
 
       // Check if already at table
-      const existing = getTable(roomCode);
+      const existing = getTable(code);
       if (existing?.players.find(p => p.id === user.id)) {
-        // Rejoin - just subscribe to room
-        socket.join(`poker:${roomCode}:${user.id}`);
-        socket.leave(`poker:${roomCode}:spectator`);
+        // Rejoin - just subscribe to room and give current view
+        socket.join(`poker:${code}:${user.id}`);
+        socket.leave(`poker:${code}:spectator`);
         const view = publicTable(existing, user.id);
         socket.emit('poker:state', view);
         return;
@@ -51,19 +63,19 @@ export function setupTexasHoldemSocket(io, socket) {
       });
       socket.emit('balance:update', { balance: dbUser.balance - BUY_IN });
 
-      const result = joinTable(roomCode, user.id, user.nickname, BUY_IN);
+      const result = joinTable(code, user.id, user.nickname, BUY_IN);
       if (!result.success) {
         // Refund
         await prisma.user.update({ where: { id: user.id }, data: { balance: { increment: BUY_IN } } });
         return socket.emit('poker:error', { message: result.error });
       }
 
-      socket.join(`poker:${roomCode}:${user.id}`);
-      socket.leave(`poker:${roomCode}:spectator`);
+      socket.join(`poker:${code}:${user.id}`);
+      socket.leave(`poker:${code}:spectator`);
 
-      const table = getTable(roomCode);
-      broadcast(io, roomCode, table);
-      io.to(`poker:${roomCode}:spectator`).emit('poker:playerJoined', {
+      const table = getTable(code);
+      broadcast(io, code, table);
+      io.to(`poker:${code}:spectator`).emit('poker:playerJoined', {
         nickname: user.nickname, count: table.players.length
       });
     } catch (err) {
@@ -73,28 +85,34 @@ export function setupTexasHoldemSocket(io, socket) {
   });
 
   socket.on('poker:start', ({ roomCode }) => {
-    const result = startGame(roomCode);
+    if (!roomCode) return;
+    const code = roomCode.toUpperCase();
+    const result = startGame(code);
     if (!result.success) return socket.emit('poker:error', { message: result.error });
-    broadcast(io, roomCode, result.table);
+    broadcast(io, code, result.table);
   });
 
   socket.on('poker:action', async ({ roomCode, action, amount }) => {
-    const result = playerAction(roomCode, user.id, action, parseInt(amount) || 0);
+    if (!roomCode) return;
+    const code = roomCode.toUpperCase();
+    const result = playerAction(code, user.id, action, parseInt(amount) || 0);
     if (!result.success) return socket.emit('poker:error', { message: result.error });
 
-    broadcast(io, roomCode, result.table);
+    broadcast(io, code, result.table);
 
-    // If showdown, just schedule the next hand broadcast
+    // If showdown, schedule the next hand broadcast
     if (result.table.phase === 'showdown' && result.table.winners) {
       setTimeout(() => {
-        const table = getTable(roomCode);
-        if (table) broadcast(io, roomCode, table);
+        const table = getTable(code);
+        if (table) broadcast(io, code, table);
       }, 6500);
     }
   });
 
   socket.on('poker:leave', async ({ roomCode }) => {
-    const table = getTable(roomCode);
+    if (!roomCode) return;
+    const code = roomCode.toUpperCase();
+    const table = getTable(code);
     if (!table) return;
 
     const player = table.players.find(p => p.id === user.id);
@@ -110,46 +128,49 @@ export function setupTexasHoldemSocket(io, socket) {
       } catch (e) { console.error('poker:leave balance error:', e); }
     }
 
-    leaveTable(roomCode, user.id);
-    socket.leave(`poker:${roomCode}:${user.id}`);
-    socket.leave(`poker:${roomCode}:spectator`);
+    leaveTable(code, user.id);
+    socket.leave(`poker:${code}:${user.id}`);
+    socket.leave(`poker:${code}:spectator`);
 
-    const updatedTable = getTable(roomCode);
-    if (updatedTable) broadcast(io, roomCode, updatedTable);
-    else io.to(`poker:${roomCode}:spectator`).emit('poker:tableClosed');
+    const updatedTable = getTable(code);
+    if (updatedTable) broadcast(io, code, updatedTable);
+    else io.to(`poker:${code}:spectator`).emit('poker:tableClosed');
   });
 
   socket.on('disconnect', async () => {
-    // Auto-leave and refund stacks from all active tables on disconnect
-    try {
-      const room = await prisma.room.findFirst({
-        where: { members: { some: { userId: user.id } } }
-      });
-      if (!room) return;
-      const roomCode = room.code;
-      const table = getTable(roomCode);
-      if (!table) return;
+    // Grace period of 15 seconds: Wait before kicking user and refunding them
+    const gracePeriodMs = 15000;
 
-      const player = table.players.find(p => p.id === user.id);
-      if (player && player.stack > 0) {
-        // Return remaining stack to database balance
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { balance: { increment: player.stack } },
+    const timeoutId = setTimeout(async () => {
+      try {
+        const room = await prisma.room.findFirst({
+          where: { members: { some: { userId: user.id } } }
         });
-        // Emit balance update to player's active socket if still partially alive
-        const updatedUser = await prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } });
-        socket.emit('balance:update', { balance: updatedUser.balance });
-      }
-      leaveTable(roomCode, user.id);
-      socket.leave(`poker:${roomCode}:${user.id}`);
-      socket.leave(`poker:${roomCode}:spectator`);
+        if (!room) return;
+        const roomCode = room.code;
+        const table = getTable(roomCode);
+        if (!table) return;
 
-      const updatedTable = getTable(roomCode);
-      if (updatedTable) broadcast(io, roomCode, updatedTable);
-      else io.to(`poker:${roomCode}:spectator`).emit('poker:tableClosed');
-    } catch (err) {
-      console.error('Poker disconnect cleanup error:', err);
-    }
+        const player = table.players.find(p => p.id === user.id);
+        if (player && player.stack > 0) {
+          // Refund remaining stack
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { balance: { increment: player.stack } },
+          });
+        }
+        
+        leaveTable(roomCode, user.id);
+        pokerDisconnectTimeouts.delete(user.id);
+
+        const updatedTable = getTable(roomCode);
+        if (updatedTable) broadcast(io, roomCode, updatedTable);
+        else io.to(`poker:${roomCode}:spectator`).emit('poker:tableClosed');
+      } catch (err) {
+        console.error('Poker disconnect grace cleanup error:', err);
+      }
+    }, gracePeriodMs);
+
+    pokerDisconnectTimeouts.set(user.id, timeoutId);
   });
 }

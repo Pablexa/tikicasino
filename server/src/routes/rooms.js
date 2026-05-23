@@ -11,6 +11,15 @@ export const roomsRouter = Router();
 const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_PLAYERS = 15;
 
+// In-memory cache variables for active rooms
+let cachedActiveRooms = null;
+let lastCacheTime = 0;
+
+export function invalidateActiveRoomsCache() {
+  cachedActiveRooms = null;
+  lastCacheTime = 0;
+}
+
 function generateRoomCode() {
   let code = '';
   for (let i = 0; i < 6; i++) {
@@ -21,20 +30,25 @@ function generateRoomCode() {
 
 roomsRouter.get('/active', requireAuth, async (req, res) => {
   try {
-    const rooms = await prisma.room.findMany({
-      where: { isActive: true },
-      include: {
-        owner: { select: { id: true, nickname: true, avatar: true } },
-        members: {
-          where: { isKicked: false },
-          include: {
-            user: { select: { id: true, nickname: true, avatar: true } }
+    const now = Date.now();
+    if (!cachedActiveRooms || now - lastCacheTime > 3000) {
+      const rooms = await prisma.room.findMany({
+        where: { isActive: true },
+        include: {
+          owner: { select: { id: true, nickname: true, avatar: true } },
+          members: {
+            where: { isKicked: false },
+            include: {
+              user: { select: { id: true, nickname: true, avatar: true } }
+            }
           }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json({ rooms: rooms.map(formatRoom) });
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      cachedActiveRooms = rooms.map(formatRoom);
+      lastCacheTime = now;
+    }
+    res.json({ rooms: cachedActiveRooms });
   } catch (err) {
     console.error('Get active rooms error:', err);
     res.status(500).json({ error: 'Error al obtener salas activas.' });
@@ -117,6 +131,7 @@ roomsRouter.post('/create', requireAuth, async (req, res) => {
       },
     });
 
+    invalidateActiveRoomsCache();
     res.status(201).json({ room: formatRoom(room) });
   } catch (err) {
     console.error('Create room error:', err);
@@ -178,6 +193,7 @@ roomsRouter.post('/join', requireAuth, async (req, res) => {
       },
     });
 
+    invalidateActiveRoomsCache();
     res.json({ room: formatRoom(updatedRoom) });
   } catch (err) {
     console.error('Join room error:', err);

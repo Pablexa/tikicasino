@@ -149,7 +149,7 @@ export default function Lobby() {
     checkCooldowns()
     fetchActiveRooms()
 
-    const roomsTimer = setInterval(fetchActiveRooms, 5000)
+    const roomsTimer = setInterval(fetchActiveRooms, 8000)
     return () => clearInterval(roomsTimer)
   }, [])
 
@@ -302,7 +302,7 @@ export default function Lobby() {
             <div>
               <h2 className="font-display font-bold text-lg text-tiki-text mb-4">Juegos</h2>
               <p className="text-xs text-tiki-muted mb-4">Creá o unite a una sala primero para empezar a jugar.</p>
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
                 {GAMES.map((game) => (
                   <motion.div key={game.id} whileHover={{ y: -4 }}
                     className={`game-card bg-gradient-to-br ${game.color} border ${game.border} p-4`}>

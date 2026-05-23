@@ -70,9 +70,7 @@ const HAND_NAMES = [
 ];
 
 // ── Game State Machine ────────────────────────────────────────────────────────
-const PHASES = ['waiting','preflop','flop','turn','river','showdown'];
 const BLINDS = { small: 50, big: 100 };
-
 const tables = new Map(); // roomCode -> TableState
 
 export function getTable(roomCode) { return tables.get(roomCode) || null; }
@@ -103,8 +101,25 @@ export function joinTable(roomCode, userId, nickname, buyIn = 2000) {
 export function leaveTable(roomCode, userId) {
   const table = tables.get(roomCode);
   if (!table) return;
-  table.players = table.players.filter(p => p.id !== userId);
-  if (table.players.length === 0) tables.delete(roomCode);
+
+  const inHand = !['waiting', 'showdown'].includes(table.phase);
+  if (inHand) {
+    const player = table.players.find(p => p.id === userId);
+    if (player) {
+      player.folded = true;
+      player.stack = 0;
+      // If it was this player's turn, automatically advance the action to prevent hangs
+      if (table.players[table.actionIdx]?.id === userId) {
+        advanceAction(table);
+      }
+    }
+  } else {
+    table.players = table.players.filter(p => p.id !== userId);
+  }
+
+  if (table.players.length === 0) {
+    tables.delete(roomCode);
+  }
 }
 
 export function startGame(roomCode) {
@@ -147,6 +162,7 @@ function dealNewHand(table) {
 
 function postBlind(table, idx, amount) {
   const p = table.players[idx];
+  if (!p) return;
   const actual = Math.min(amount, p.stack);
   p.stack -= actual; p.bet = actual; p.totalBet = actual;
   table.pot += actual;
