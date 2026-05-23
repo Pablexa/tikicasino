@@ -283,6 +283,30 @@ roomsRouter.post('/:roomCode/kick', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/rooms/:roomCode/delete
+roomsRouter.post('/:roomCode/delete', requireAuth, async (req, res) => {
+  try {
+    const room = await prisma.room.findUnique({
+      where: { code: req.params.roomCode.toUpperCase() },
+    });
+
+    if (!room) return res.status(404).json({ error: 'Sala no encontrada.' });
+    if (room.ownerId !== req.user.id) {
+      return res.status(403).json({ error: 'Solo el dueño puede cerrar la sala.' });
+    }
+
+    const io = req.app.get('io');
+    const { deleteRoom } = await import('../sockets/index.js');
+    await deleteRoom(io, room.id, room.code);
+    invalidateActiveRoomsCache();
+
+    res.json({ success: true, message: 'Sala cerrada correctamente.' });
+  } catch (err) {
+    console.error('Delete room error:', err);
+    res.status(500).json({ error: 'Error al cerrar la sala.' });
+  }
+});
+
 function formatRoom(room) {
   return {
     id: room.id,

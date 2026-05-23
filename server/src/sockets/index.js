@@ -170,12 +170,19 @@ export async function deleteRoom(io, roomId, roomCode) {
     // Notify any remaining sockets in the room that it is deleted
     io.to(`room:${roomCode}`).emit('room:deleted');
 
-    // Transactional cleanup
+    // 1. Fetch all game round IDs first to safely delete child records in SQLite
+    const rounds = await prisma.gameRound.findMany({
+      where: { roomId },
+      select: { id: true }
+    });
+    const roundIds = rounds.map(r => r.id);
+
+    // 2. Perform transactional cleanups in sequential child-to-parent order
     await prisma.$transaction([
       prisma.chatMessage.deleteMany({ where: { roomId } }),
       prisma.roomMember.deleteMany({ where: { roomId } }),
       prisma.invite.deleteMany({ where: { roomId } }),
-      prisma.gameRoundPlayer.deleteMany({ where: { gameRound: { roomId } } }),
+      prisma.gameRoundPlayer.deleteMany({ where: { gameRoundId: { in: roundIds } } }),
       prisma.gameRound.deleteMany({ where: { roomId } }),
       prisma.balanceTransaction.updateMany({ where: { roomId }, data: { roomId: null } }),
       prisma.room.delete({ where: { id: roomId } }),

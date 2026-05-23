@@ -242,6 +242,17 @@ export default function Room() {
     }
   }
 
+  const closeRoom = async () => {
+    if (!window.confirm('¿Estás seguro de que querés cerrar esta sala definitivamente? Se expulsará a todos los jugadores.')) return
+    try {
+      await api.post(`/rooms/${roomCode}/delete`)
+      toast.success('Sala cerrada con éxito')
+      navigate('/lobby')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'No se pudo cerrar la sala')
+    }
+  }
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="spinner" />
@@ -286,6 +297,11 @@ export default function Room() {
               <button onClick={copyLink} className="btn-ghost text-sm py-2 px-3">
                 Invitar
               </button>
+              {isOwner && (
+                <button onClick={closeRoom} className="btn-danger text-sm py-2 px-3 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/30 transition-all">
+                  Cerrar Sala
+                </button>
+              )}
               <Link to="/lobby" className="btn-ghost text-sm py-2 px-3">
                 Salir
               </Link>

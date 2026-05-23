@@ -179,23 +179,49 @@ export default function ShooterGame() {
     setKeysPressed({ w: false, s: false, a: false, d: false })
   }
 
+  // High-performance Input Refs to avoid breaking/recreating setInterval timers
+  const keysPressedRef = useRef({})
+  const aimAngleRef = useRef(0)
+  const isShootingRef = useRef(false)
+  const meRef = useRef(null)
+
+  // Keep references perfectly synchronized with state mutations
+  useEffect(() => {
+    keysPressedRef.current = keysPressed
+  }, [keysPressed])
+
+  useEffect(() => {
+    aimAngleRef.current = aimAngle
+  }, [aimAngle])
+
+  useEffect(() => {
+    isShootingRef.current = isShooting
+  }, [isShooting])
+
+  useEffect(() => {
+    if (gameState) {
+      meRef.current = gameState.players.find(p => p.userId === user.id)
+    }
+  }, [gameState, user.id])
+
   // Emits user inputs at 30Hz for ultimate fluid responsiveness
   useEffect(() => {
-    if (!socket || !gameState) return
-    const me = gameState.players.find(p => p.userId === user.id)
-    if (!me || me.isDead || !me.hasBet) return
+    if (!socket) return
 
     const interval = setInterval(() => {
+      const activeMe = meRef.current
+      if (!activeMe || activeMe.isDead || !activeMe.hasBet) return
+
       socket.emit('shooter:input', {
         roomCode,
-        keys: keysPressed,
-        angle: aimAngle,
-        shoot: isShooting
+        keys: keysPressedRef.current,
+        angle: aimAngleRef.current,
+        shoot: isShootingRef.current
       })
     }, 1000 / 30)
 
     return () => clearInterval(interval)
-  }, [socket, keysPressed, aimAngle, isShooting, gameState])
+  }, [socket, roomCode])
 
   // Place Spawn / Registration Bet of 500 Caldicoins (Only allowed during intermission)
   const placeSpawnBet = () => {
