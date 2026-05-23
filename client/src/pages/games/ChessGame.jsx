@@ -93,6 +93,11 @@ const PIECE_SVGS = {
   )
 }
 
+const PIECE_CHARS = {
+  P: '♙', R: '♖', N: '♘', B: '♗', Q: '♕',
+  p: '♟', r: '♜', n: '♞', b: '♝', q: '♛'
+}
+
 const coordsToSquare = (row, col) => {
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
   const ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
@@ -230,6 +235,75 @@ export default function ChessGame() {
     socket.emit('chess:draw_accept', { roomCode })
   }
 
+  const getCapturedPieces = () => {
+    if (!gameState || !gameState.board) return { white: [], black: [] }
+    const initial = {
+      white: ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P', 'R', 'R', 'N', 'N', 'B', 'B', 'Q'],
+      black: ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'r', 'r', 'n', 'n', 'b', 'b', 'q']
+    }
+    const current = { white: [], black: [] }
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = gameState.board[r][c]
+        if (piece) {
+          if (piece === piece.toUpperCase()) {
+            current.white.push(piece)
+          } else {
+            current.black.push(piece)
+          }
+        }
+      }
+    }
+    const capturedWhite = []
+    const tempWhite = [...current.white]
+    for (const p of initial.white) {
+      const idx = tempWhite.indexOf(p)
+      if (idx > -1) {
+        tempWhite.splice(idx, 1)
+      } else {
+        capturedWhite.push(p)
+      }
+    }
+    const capturedBlack = []
+    const tempBlack = [...current.black]
+    for (const p of initial.black) {
+      const idx = tempBlack.indexOf(p)
+      if (idx > -1) {
+        tempBlack.splice(idx, 1)
+      } else {
+        capturedBlack.push(p)
+      }
+    }
+    return { white: capturedWhite, black: capturedBlack }
+  }
+
+  const renderMovesHistory = () => {
+    const history = gameState.movesHistory || []
+    const pairs = []
+    for (let i = 0; i < history.length; i += 2) {
+      pairs.push({
+        num: Math.floor(i / 2) + 1,
+        white: history[i],
+        black: history[i + 1] || ''
+      })
+    }
+    return (
+      <div className="space-y-1 max-h-[140px] overflow-y-auto font-mono text-xs pr-1 scrollbar-thin">
+        {pairs.length === 0 ? (
+          <span className="text-tiki-muted italic text-[11px]">Aún no hay jugadas.</span>
+        ) : (
+          pairs.map(p => (
+            <div key={p.num} className="flex justify-between py-1 border-b border-white/5">
+              <span className="text-amber-500/80 font-bold w-1/4">{p.num}.</span>
+              <span className="text-white font-medium w-3/8">{p.white}</span>
+              <span className="text-gray-400 font-medium w-3/8">{p.black}</span>
+            </div>
+          ))
+        )}
+      </div>
+    )
+  }
+
   if (!gameState) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -331,12 +405,100 @@ export default function ChessGame() {
             {/* Bottom Player */}
             <div className="w-full max-w-[500px] flex items-center justify-between bg-black/40 border border-white/5 rounded-b-2xl p-4">
               <div className="flex items-center gap-3">
+                {gameState.black ? (
+                  <>
+                    <img src={`/avatars/${gameState.black.avatar}.png`} alt="avatar" className="w-10 h-10 rounded-xl" onError={e => e.target.src = '/avatars/tiki1.png'} />
+                    <div>
+                      <h4 className="text-white font-bold">{gameState.black.nickname}</h4>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                        <span className="text-[10px] text-red-400 uppercase tracking-widest font-black">Piezas Negras</span>
+                        {gameState.status === 'playing' && getCapturedPieces().white.length > 0 && (
+                          <div className="flex items-center gap-0.5 text-xs text-white/60 bg-white/5 px-1.5 py-0.5 rounded font-serif">
+                            {getCapturedPieces().white.map((p, idx) => (
+                              <span key={idx}>{PIECE_CHARS[p]}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => sitDown('black')} className="btn-ghost py-1.5 px-3 text-xs">+ Sentarse en Negras</button>
+                )}
+              </div>
+              
+              {gameState.status === 'playing' && (
+                <div className={`font-mono font-bold text-lg px-4 py-1.5 rounded-xl border ${gameState.turn === 'black' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-black/50 text-gray-500 border-white/5'}`}>
+                  {formatTimer(gameState.timers.black)}
+                </div>
+              )}
+            </div>
+
+            {/* Chess board and border frame */}
+            <div className="w-full max-w-[500px] aspect-square bg-[#2b1810] rounded-lg p-3 shadow-2xl border-4 border-[#ca8a04]">
+              <div className="w-full h-full grid grid-cols-8 grid-rows-8 bg-amber-950 rounded overflow-hidden">
+                {Array.from({ length: 8 }).map((_, rIndex) => {
+                  const row = myColor === 'black' ? rIndex : 7 - rIndex
+                  
+                  return Array.from({ length: 8 }).map((_, cIndex) => {
+                    const col = myColor === 'black' ? 7 - cIndex : cIndex
+                    const isDarkCell = (row + col) % 2 === 0
+                    
+                    const cellColor = isDarkCell 
+                      ? 'bg-gradient-to-br from-[#5c4033] to-[#452a1e]' 
+                      : 'bg-gradient-to-br from-[#f5f5dc] to-[#e4dfd0]'
+                    
+                    const piece = gameState.board[row][col]
+                    const isSelected = selectedCell?.row === row && selectedCell?.col === col
+                    const isValidMove = validMoves.some(m => m.row === row && m.col === col)
+
+                    return (
+                      <div
+                        key={`${row}-${col}`}
+                        onClick={() => handleCellClick(row, col)}
+                        className={`relative aspect-square flex items-center justify-center cursor-pointer transition-all ${cellColor} ${isSelected ? 'ring-4 ring-yellow-400/80 z-10' : ''}`}
+                      >
+                        {/* Pieces SVG */}
+                        {piece && (
+                          <div className="w-full h-full flex items-center justify-center hover:scale-110 transition-transform pointer-events-none select-none">
+                            {PIECE_SVGS[piece]}
+                          </div>
+                        )}
+
+                        {/* Dot indicator for empty valid moves */}
+                        {isValidMove && !piece && (
+                          <span className="w-4 h-4 rounded-full bg-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse pointer-events-none select-none" />
+                        )}
+
+                        {/* Red overlay for enemy piece target under attack */}
+                        {isValidMove && piece && (
+                          <span className="absolute inset-0 bg-red-500/30 border border-red-500/80 pointer-events-none select-none" />
+                        )}
+                      </div>
+                    )
+                  })
+                })}
+              </div>
+            </div>
+
+            {/* Bottom Player */}
+            <div className="w-full max-w-[500px] flex items-center justify-between bg-black/40 border border-white/5 rounded-b-2xl p-4">
+              <div className="flex items-center gap-3">
                 {gameState.white ? (
                   <>
                     <img src={`/avatars/${gameState.white.avatar}.png`} alt="avatar" className="w-10 h-10 rounded-xl" onError={e => e.target.src = '/avatars/tiki1.png'} />
                     <div>
                       <h4 className="text-white font-bold">{gameState.white.nickname}</h4>
-                      <span className="text-[10px] text-amber-400 uppercase tracking-widest font-black">Piezas Blancas</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                        <span className="text-[10px] text-amber-400 uppercase tracking-widest font-black">Piezas Blancas</span>
+                        {gameState.status === 'playing' && getCapturedPieces().black.length > 0 && (
+                          <div className="flex items-center gap-0.5 text-xs text-black/70 bg-white/10 px-1.5 py-0.5 rounded font-serif">
+                            {getCapturedPieces().black.map((p, idx) => (
+                              <span key={idx}>{PIECE_CHARS[p]}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </>
                 ) : (
@@ -360,7 +522,7 @@ export default function ChessGame() {
                   <button onClick={acceptDraw} className="btn-green py-2.5 px-6 text-sm">🤝 Aceptar Tablas</button>
                 ) : (
                   <button onClick={offerDraw} disabled={!!gameState.drawOfferedBy} className="btn-ghost py-2.5 px-6 text-sm">
-                    {gameState.drawOfferedBy === user.id ? '⌛ Tablas Ofrecidas' : '🤝 Proponer Tablas'}
+                     {gameState.drawOfferedBy === user.id ? '⌛ Tablas Ofrecidas' : '🤝 Proponer Tablas'}
                   </button>
                 )}
               </div>
@@ -374,9 +536,39 @@ export default function ChessGame() {
             )}
           </div>
 
-          {/* Right Panel: Chat Panel */}
-          <div className="h-[600px] flex flex-col">
-            <ChatPanel roomCode={roomCode} />
+          {/* Right Panel: Tabbed Stats & Chat */}
+          <div className="h-[620px] flex flex-col gap-4">
+            
+            {/* Cyberpunk Game Info & Move History Panel */}
+            <div className="glass rounded-3xl p-5 border border-white/5 bg-slate-900/60 flex flex-col gap-4 flex-1 max-h-[260px]">
+              <div>
+                <h3 className="font-display font-bold text-sm text-white mb-1 uppercase tracking-wider">Tablero de Jugadas</h3>
+                {gameState.status === 'playing' ? (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-tiki-muted">Turno:</span>
+                    <span className={`px-2 py-0.5 rounded font-black uppercase text-[10px] ${gameState.turn === 'white' ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
+                      {gameState.turn === 'white' ? 'Blancas (Tú)' : 'Negras (Tú)'}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-tiki-muted italic">Esperando que se inicien los duelos...</span>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-hidden border border-white/5 rounded-2xl bg-black/40 p-3 flex flex-col">
+                <div className="flex justify-between text-[10px] text-tiki-muted font-bold uppercase tracking-wider border-b border-white/10 pb-1 mb-2">
+                  <span className="w-1/4">#</span>
+                  <span className="w-3/8">Blancas</span>
+                  <span className="w-3/8">Negras</span>
+                </div>
+                {renderMovesHistory()}
+              </div>
+            </div>
+
+            {/* Chat Panel container */}
+            <div className="flex-[2] h-[340px] flex flex-col">
+              <ChatPanel roomCode={roomCode} />
+            </div>
           </div>
         </div>
       </main>
